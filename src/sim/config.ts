@@ -1,21 +1,28 @@
 export const CONFIG = {
-  startingMoney: 10_000,
+  startingMoney: 75_000,
 
   // Economy
-  railwayBaseCost: 250,
-  railwayCostPerUnit: 7.5,
+  railwayBaseCost: 1_800,
+  railwayCostPerUnit: 8.5,
+  stationCostBase: 250,
+  stationCostPerMillion: 55,
+  stationCostMaxMultiplier: 2.4,
+  lineUpgradeBaseCost: 3_500,
+  lineUpgradeCostPerUnit: 4.2,
+  continentUnlockBaseCost: 250_000,
   trainCost: 1_200,
   ticketMultiplier: 0.022,
 
   // Trains
   trainCapacity: 90,
   trainSpeed: 62, // world units per second
+  lineLevelSpeed: { 1: 1, 2: 1.45, 3: 2.25 },
   dwellTime: 1.1, // seconds stopped at a station
   railwayTrainCapacity: 4,
 
   // Passengers
   spawnInterval: 1.5, // seconds between demand pulses per city
-  spawnRatePerMillion: 3.4, // passengers per second per 1M population
+  spawnRatePerMillion: 1.65, // passengers per second per 1M population
   /** distance falloff for destination choice — higher means more local travel */
   gravityExponent: 1.35,
 
