@@ -1,4 +1,4 @@
-import { HIGHLANDS, WATER, WORLD, type Poly } from '../sim/mapData';
+import { HIGHLANDS, LAND, WATER, WORLD, type Poly } from '../sim/mapData';
 import { statusFor } from '../sim/engine';
 import type { City, GameState } from '../sim/types';
 import { worldToScreen, type Camera } from './camera';
@@ -59,8 +59,17 @@ function drawBackground(ctx: CanvasRenderingContext2D, view: ViewState) {
 
   const tl = worldToScreen(view.camera, view.width, view.height, 0, 0);
   const br = worldToScreen(view.camera, view.width, view.height, WORLD.width, WORLD.height);
-  ctx.fillStyle = COLORS.land;
+  ctx.fillStyle = COLORS.water;
   ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+
+  for (const poly of LAND) {
+    tracePoly(ctx, view, poly);
+    ctx.fillStyle = COLORS.land;
+    ctx.fill();
+    ctx.strokeStyle = COLORS.landEdge;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
 
   // survey grid
   const step = 100;
@@ -120,11 +129,20 @@ function drawRailways(ctx: CanvasRenderingContext2D, state: GameState, view: Vie
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
 
-    ctx.strokeStyle = active ? COLORS.railActive : COLORS.rail;
-    ctx.lineWidth = Math.max(1.6, 2.6 * zoom);
+    ctx.strokeStyle = rail.level === 3 ? '#D8F7FF' : active ? COLORS.railActive : COLORS.rail;
+    ctx.lineWidth = Math.max(1.6, (2.6 + rail.level * 0.7) * zoom);
     ctx.stroke();
 
     // sleepers
+    if (rail.level >= 2) {
+      ctx.strokeStyle = rail.level === 3 ? '#81E6FF' : COLORS.brass;
+      ctx.lineWidth = Math.max(0.8, 1.1 * zoom);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+
     if (zoom > 0.55) {
       const dx = b.x - a.x;
       const dy = b.y - a.y;

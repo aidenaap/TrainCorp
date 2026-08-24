@@ -104,8 +104,29 @@ export class GameEngine {
 
   // ---------------------------------------------------------------- economy
 
+  stationCost(city: City): number {
+    const millions = city.population / 1_000_000;
+    const scaled = CONFIG.stationCostBase + millions * CONFIG.stationCostPerMillion;
+    return Math.round(
+      Math.min(CONFIG.stationCostBase * CONFIG.stationCostMaxMultiplier, scaled),
+    );
+  }
+
   railwayCost(a: City, b: City): number {
-    return Math.round(CONFIG.railwayBaseCost + distanceBetween(a, b) * CONFIG.railwayCostPerUnit);
+    return Math.round(
+      CONFIG.railwayBaseCost +
+        distanceBetween(a, b) * CONFIG.railwayCostPerUnit +
+        this.stationCost(a) +
+        this.stationCost(b),
+    );
+  }
+
+  lineUpgradeCost(railway: Railway): number {
+    if (railway.level >= 3) return 0;
+    return Math.round(
+      CONFIG.lineUpgradeBaseCost * railway.level +
+        railway.distance * CONFIG.lineUpgradeCostPerUnit * railway.level,
+    );
   }
 
   findRailwayBetween(a: string, b: string): Railway | undefined {
@@ -135,6 +156,7 @@ export class GameEngine {
       distance: distanceBetween(from, to),
       capacity: CONFIG.railwayTrainCapacity,
       constructionCost: cost,
+      level: 1,
       trainIds: [],
     };
     this.state.railways.set(railway.id, railway);
@@ -143,6 +165,20 @@ export class GameEngine {
     this.state.money -= cost;
     this.state.stats.totalSpent += cost;
     this.state.routes = buildRoutingTable(this.state.cities, this.state.railways);
+    return { ok: true };
+  }
+
+  upgradeRailway(railwayId: string): BuildResult {
+    const railway = this.state.railways.get(railwayId);
+    if (!railway) return { ok: false, error: 'Unknown line.' };
+    if (railway.level >= 3) return { ok: false, error: 'This line is already bullet train track.' };
+    const cost = this.lineUpgradeCost(railway);
+    if (this.state.money < cost) {
+      return { ok: false, error: `Short by $${Math.ceil(cost - this.state.money).toLocaleString()}.` };
+    }
+    railway.level = (railway.level + 1) as Railway['level'];
+    this.state.money -= cost;
+    this.state.stats.totalSpent += cost;
     return { ok: true };
   }
 
@@ -244,7 +280,8 @@ export class GameEngine {
         continue;
       }
 
-      const delta = (train.speed * dt) / railway.distance;
+      const lineSpeed = train.speed * CONFIG.lineLevelSpeed[railway.level];
+      const delta = (lineSpeed * dt) / railway.distance;
       train.progress += train.direction * delta;
 
       if (train.direction === 1 && train.progress >= 1) {
@@ -381,6 +418,9 @@ export class GameEngine {
         distance: r.distance,
         trains: r.trainIds.length,
         capacity: r.capacity,
+        level: r.level,
+        speedMultiplier: CONFIG.lineLevelSpeed[r.level],
+        upgradeCost: this.lineUpgradeCost(r),
       })),
     };
   }
@@ -407,6 +447,9 @@ export interface RailwaySnapshot {
   distance: number;
   trains: number;
   capacity: number;
+  level: 1 | 2 | 3;
+  speedMultiplier: number;
+  upgradeCost: number;
 }
 
 export interface UiSnapshot {
