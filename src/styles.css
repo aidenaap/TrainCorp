@@ -682,3 +682,41 @@ button {
   display: flex;
   gap: 8px;
 }
+
+.continent-picker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, calc(100% - 32px));
+  padding: 22px;
+  background: rgba(16, 26, 30, 0.94);
+  border: 1px solid var(--edge);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.42);
+  z-index: 5;
+}
+
+.continent-picker h2 {
+  margin: 2px 0 8px;
+  font-family: var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.continent-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.continent-unlocks {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: min(680px, calc(100% - 32px));
+  z-index: 3;
+}

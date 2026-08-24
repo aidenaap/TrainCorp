@@ -1,4 +1,11 @@
 export type CityTier = 'small' | 'medium' | 'large';
+export type ContinentId =
+  | 'north-america'
+  | 'south-america'
+  | 'europe'
+  | 'africa'
+  | 'asia'
+  | 'oceania';
 
 export type LoadStatus = 'healthy' | 'warning' | 'critical' | 'overloaded';
 
@@ -15,6 +22,7 @@ export interface City {
   y: number;
   population: number;
   tier: CityTier;
+  continent: ContinentId;
 
   passengerCapacity: number;
   /** destinationCityId -> aggregated demand waiting here */
@@ -73,6 +81,8 @@ export interface GameState {
   stats: Stats;
   /** all-pairs next-hop routing table, rebuilt when the network changes */
   routes: Map<string, Map<string, string>>;
+  unlockedContinents: Set<ContinentId>;
+  startingContinent: ContinentId | null;
 }
 
 export interface BuildResult {

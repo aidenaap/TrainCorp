@@ -21,7 +21,7 @@ export const CONFIG = {
 
   // Passengers
   spawnInterval: 1.5, // seconds between demand pulses per city
-  spawnRatePerMillion: 3.4, // passengers per second per 1M population
+  spawnRatePerMillion: 1.65, // passengers per second per 1M population
   /** distance falloff for destination choice — higher means more local travel */
   gravityExponent: 1.35,
 

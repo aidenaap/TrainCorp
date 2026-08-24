@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import { CITY_SEEDS, TIER_CAPACITY, tierFor } from './mapData';
+import { CITY_SEEDS, CONTINENTS, TIER_CAPACITY, tierFor } from './mapData';
 import { buildRoutingTable, nextHop } from './routing';
 import type {
   BuildResult,
@@ -9,6 +9,7 @@ import type {
   LoadStatus,
   Railway,
   Train,
+  ContinentId,
 } from './types';
 
 let idCounter = 0;
@@ -60,6 +61,7 @@ export class GameEngine {
         y: seed.y,
         population: seed.population,
         tier,
+        continent: seed.continent,
         passengerCapacity: TIER_CAPACITY[tier],
         demand: new Map(),
         waitingPassengers: 0,
@@ -82,10 +84,48 @@ export class GameEngine {
         recentRevenue: new Array(60).fill(0),
       },
       routes: new Map(),
+      unlockedContinents: new Set(),
+      startingContinent: null,
     };
 
     this.buildGravity();
     this.state.routes = buildRoutingTable(cities, this.state.railways);
+  }
+
+  chooseStartingContinent(continentId: ContinentId): BuildResult {
+    if (!CONTINENTS.some((c) => c.id === continentId)) return { ok: false, error: 'Unknown continent.' };
+    if (this.state.startingContinent) return { ok: false, error: 'A starting continent is already selected.' };
+    this.state.startingContinent = continentId;
+    this.state.unlockedContinents.add(continentId);
+    this.buildGravity();
+    return { ok: true };
+  }
+
+  continentUnlockCost(): number {
+    if (this.state.unlockedContinents.size === 0) return 0;
+    return CONFIG.continentUnlockBaseCost * this.state.unlockedContinents.size;
+  }
+
+  unlockContinent(continentId: ContinentId): BuildResult {
+    const continent = CONTINENTS.find((c) => c.id === continentId);
+    if (!continent) return { ok: false, error: 'Unknown continent.' };
+    if (this.state.unlockedContinents.has(continentId)) {
+      return { ok: false, error: `${continent.name} is already unlocked.` };
+    }
+    const cost = this.continentUnlockCost();
+    if (this.state.money < cost) {
+      return { ok: false, error: `Short by $${Math.ceil(cost - this.state.money).toLocaleString()}.` };
+    }
+    this.state.money -= cost;
+    this.state.stats.totalSpent += cost;
+    this.state.unlockedContinents.add(continentId);
+    this.buildGravity();
+    this.state.routes = buildRoutingTable(this.state.cities, this.state.railways);
+    return { ok: true };
+  }
+
+  isContinentUnlocked(continentId: ContinentId): boolean {
+    return this.state.unlockedContinents.has(continentId);
   }
 
   private buildGravity() {
@@ -94,6 +134,9 @@ export class GameEngine {
       const weights: { id: string; weight: number }[] = [];
       for (const dest of this.state.cities.values()) {
         if (dest.id === origin.id) continue;
+        if (!this.isContinentUnlocked(origin.continent) || !this.isContinentUnlocked(dest.continent)) {
+          continue;
+        }
         const d = Math.max(60, distanceBetween(origin, dest));
         const weight = (dest.population / 1_000_000) / Math.pow(d / 300, CONFIG.gravityExponent);
         weights.push({ id: dest.id, weight });
@@ -141,6 +184,9 @@ export class GameEngine {
     const from = this.state.cities.get(fromId);
     const to = this.state.cities.get(toId);
     if (!from || !to) return { ok: false, error: 'Unknown city.' };
+    if (!this.isContinentUnlocked(from.continent) || !this.isContinentUnlocked(to.continent)) {
+      return { ok: false, error: 'Unlock both continents before building there.' };
+    }
     if (this.findRailwayBetween(fromId, toId)) {
       return { ok: false, error: `${from.name} and ${to.name} are already linked.` };
     }
@@ -234,6 +280,11 @@ export class GameEngine {
   private updateCities(dt: number) {
     for (const city of this.state.cities.values()) {
       city.spawnTimer -= dt;
+      if (!this.isContinentUnlocked(city.continent)) {
+        city.spawnTimer = CONFIG.spawnInterval;
+        city.waitingPassengers = 0;
+        continue;
+      }
       if (city.spawnTimer <= 0) {
         city.spawnTimer += CONFIG.spawnInterval;
         this.spawnDemand(city);
@@ -248,6 +299,7 @@ export class GameEngine {
     const amount =
       (city.population / 1_000_000) * CONFIG.spawnRatePerMillion * CONFIG.spawnInterval;
     const weights = this.gravity.get(city.id);
+    if (!this.isContinentUnlocked(city.continent)) return;
     if (!weights || amount <= 0) return;
 
     const picks = 2;
@@ -396,6 +448,8 @@ export class GameEngine {
         railways: c.connectedRailways.length,
         trains: this.trainsAtCity(c.id),
         inbound,
+        continent: c.continent,
+        unlocked: this.state.unlockedContinents.has(c.continent),
       };
     });
 
@@ -409,6 +463,13 @@ export class GameEngine {
       trainCount: this.state.trains.size,
       networkHealth: this.networkHealth(),
       cities,
+      continents: CONTINENTS.map((c) => ({
+        ...c,
+        unlocked: this.state.unlockedContinents.has(c.id),
+        unlockCost: this.state.unlockedContinents.has(c.id) ? 0 : this.continentUnlockCost(),
+        affordable: this.state.money >= this.continentUnlockCost(),
+      })),
+      needsStartingContinent: this.state.startingContinent === null,
       railways: [...this.state.railways.values()].map((r) => ({
         id: r.id,
         from: this.state.cities.get(r.from)!.name,
@@ -436,6 +497,18 @@ export interface CitySnapshot {
   railways: number;
   trains: number;
   inbound: number;
+  continent: ContinentId;
+  unlocked: boolean;
+}
+
+export interface ContinentSnapshot {
+  id: ContinentId;
+  name: string;
+  centerX: number;
+  centerY: number;
+  unlocked: boolean;
+  unlockCost: number;
+  affordable: boolean;
 }
 
 export interface RailwaySnapshot {
@@ -462,5 +535,7 @@ export interface UiSnapshot {
   trainCount: number;
   networkHealth: number;
   cities: CitySnapshot[];
+  continents: ContinentSnapshot[];
+  needsStartingContinent: boolean;
   railways: RailwaySnapshot[];
 }

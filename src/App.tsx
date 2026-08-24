@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GameEngine, type UiSnapshot } from './sim/engine';
+import type { ContinentId } from './sim/types';
 import { CONFIG, type SpeedOption } from './sim/config';
 import { clampCamera, createCamera, fitCamera, screenToWorld } from './render/camera';
 import { zoomAt } from './render/camera';
@@ -47,7 +48,7 @@ export default function App() {
 
   const pausedRef = useRef(paused);
   const speedRef = useRef<number>(speed);
-  pausedRef.current = paused || pending !== null;
+  pausedRef.current = paused || pending !== null || snap.needsStartingContinent;
   speedRef.current = speed;
 
   // Keep the render view in sync with React-owned selection state.
@@ -384,7 +385,45 @@ export default function App() {
             onWheel={onWheel}
           />
 
-          {snap.railwayCount === 0 && !buildMode && (
+          {snap.needsStartingContinent && (
+            <div className="continent-picker">
+              <p className="starter__eyebrow">Choose headquarters</p>
+              <h2>Start in one continent</h2>
+              <p className="starter__body">
+                Other continents begin locked. Earn enough money, then unlock them one at a time.
+              </p>
+              <div className="continent-picker__grid">
+                {snap.continents.map((continent) => (
+                  <button
+                    key={continent.id}
+                    className="btn btn--wide"
+                    onClick={() => chooseStartingContinent(continent.id)}
+                  >
+                    {continent.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!snap.needsStartingContinent && (
+            <div className="continent-unlocks">
+              {snap.continents
+                .filter((continent) => !continent.unlocked)
+                .map((continent) => (
+                  <button
+                    key={continent.id}
+                    className="btn btn--small btn--ghost"
+                    disabled={!continent.affordable}
+                    onClick={() => unlockContinent(continent.id)}
+                  >
+                    🔒 {continent.name} · {money(continent.unlockCost)}
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {snap.railwayCount === 0 && !buildMode && !snap.needsStartingContinent && (
             <div className="starter">
               <p className="starter__eyebrow">Global network, opening day</p>
               <p className="starter__body">

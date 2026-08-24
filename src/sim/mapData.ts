@@ -1,4 +1,4 @@
-import type { CityTier } from './types';
+import type { CityTier, ContinentId } from './types';
 
 export const WORLD = { width: 2400, height: 1200 };
 
@@ -8,6 +8,7 @@ export interface CitySeed {
   x: number;
   y: number;
   population: number;
+  continent: ContinentId;
 }
 
 function project(lon: number, lat: number): { x: number; y: number } {
@@ -62,6 +63,20 @@ export const TIER_CAPACITY: Record<CityTier, number> = {
 };
 
 export type Poly = [number, number][];
+const p = (lon: number, lat: number): [number, number] => {
+  const projected = project(lon, lat);
+  return [projected.x, projected.y];
+};
+
+export const LAND: Poly[] = [
+  [p(-168, 72), p(-128, 70), p(-104, 58), p(-74, 50), p(-58, 28), p(-82, 8), p(-104, 18), p(-126, 32), p(-148, 54)],
+  [p(-82, 13), p(-50, 7), p(-36, -18), p(-46, -55), p(-70, -52), p(-80, -20)],
+  [p(-12, 36), p(8, 58), p(42, 58), p(72, 48), p(100, 52), p(142, 44), p(162, 22), p(132, 4), p(78, 8), p(46, 22), p(18, 28)],
+  [p(-18, 32), p(34, 32), p(48, 5), p(30, -35), p(18, -35), p(2, 2)],
+  [p(112, -10), p(154, -12), p(150, -44), p(116, -40)],
+  [p(-8, 60), p(2, 58), p(0, 50), p(-10, 52)],
+  [p(44, -12), p(52, -14), p(50, -25), p(42, -22)],
+];
 
 const p = (lon: number, lat: number): [number, number] => {
   const projected = project(lon, lat);
