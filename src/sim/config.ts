@@ -2,13 +2,14 @@ export const CONFIG = {
   startingMoney: 75_000,
 
   // Economy
-  railwayBaseCost: 700,
-  railwayCostPerUnit: 5.5,
+  railwayBaseCost: 1_800,
+  railwayCostPerUnit: 8.5,
   stationCostBase: 250,
   stationCostPerMillion: 55,
   stationCostMaxMultiplier: 2.4,
-  lineUpgradeBaseCost: 900,
-  lineUpgradeCostPerUnit: 1.8,
+  lineUpgradeBaseCost: 3_500,
+  lineUpgradeCostPerUnit: 4.2,
+  continentUnlockBaseCost: 250_000,
   trainCost: 1_200,
   ticketMultiplier: 0.022,
 

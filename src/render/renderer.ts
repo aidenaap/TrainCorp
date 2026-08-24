@@ -1,4 +1,4 @@
-import { HIGHLANDS, LAND, WATER, WORLD, type Poly } from '../sim/mapData';
+import { CONTINENTS, HIGHLANDS, WATER, WORLD, WORLD_LAND, type Poly } from '../sim/mapData';
 import { statusFor } from '../sim/engine';
 import type { City, GameState } from '../sim/types';
 import { worldToScreen, type Camera } from './camera';
@@ -62,7 +62,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, view: ViewState) {
   ctx.fillStyle = COLORS.water;
   ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
 
-  for (const poly of LAND) {
+  for (const poly of WORLD_LAND) {
     tracePoly(ctx, view, poly);
     ctx.fillStyle = COLORS.land;
     ctx.fill();
