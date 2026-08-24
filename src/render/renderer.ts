@@ -1,4 +1,4 @@
-import { HIGHLANDS, WATER, WORLD, type Poly } from '../sim/mapData';
+import { CONTINENTS, HIGHLANDS, WATER, WORLD, WORLD_LAND, type Poly } from '../sim/mapData';
 import { statusFor } from '../sim/engine';
 import type { City, GameState } from '../sim/types';
 import { worldToScreen, type Camera } from './camera';
@@ -59,8 +59,17 @@ function drawBackground(ctx: CanvasRenderingContext2D, view: ViewState) {
 
   const tl = worldToScreen(view.camera, view.width, view.height, 0, 0);
   const br = worldToScreen(view.camera, view.width, view.height, WORLD.width, WORLD.height);
-  ctx.fillStyle = COLORS.land;
+  ctx.fillStyle = COLORS.water;
   ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+
+  for (const poly of WORLD_LAND) {
+    tracePoly(ctx, view, poly);
+    ctx.fillStyle = COLORS.land;
+    ctx.fill();
+    ctx.strokeStyle = COLORS.landEdge;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
 
   // survey grid
   const step = 100;
@@ -100,6 +109,30 @@ function drawBackground(ctx: CanvasRenderingContext2D, view: ViewState) {
   }
 }
 
+function drawContinentLocks(ctx: CanvasRenderingContext2D, state: GameState, view: ViewState) {
+  ctx.save();
+  ctx.font = '700 24px "Barlow Condensed", "Arial Narrow", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const continent of CONTINENTS) {
+    if (state.unlockedContinents.has(continent.id)) continue;
+    const p = worldToScreen(view.camera, view.width, view.height, continent.centerX, continent.centerY);
+    const wash = Math.max(130, 210 * view.camera.zoom);
+    ctx.fillStyle = 'rgba(8,13,15,0.28)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, wash, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(8,13,15,0.62)';
+    roundedRect(ctx, p.x - 72, p.y - 24, 144, 48, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(124,147,156,0.48)';
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(220,230,233,0.76)';
+    ctx.fillText(`🔒 ${continent.name}`, p.x, p.y);
+  }
+  ctx.restore();
+}
+
 function drawRailways(ctx: CanvasRenderingContext2D, state: GameState, view: ViewState) {
   const zoom = view.camera.zoom;
   for (const rail of state.railways.values()) {
@@ -120,11 +153,20 @@ function drawRailways(ctx: CanvasRenderingContext2D, state: GameState, view: Vie
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
 
-    ctx.strokeStyle = active ? COLORS.railActive : COLORS.rail;
-    ctx.lineWidth = Math.max(1.6, 2.6 * zoom);
+    ctx.strokeStyle = rail.level === 3 ? '#D8F7FF' : active ? COLORS.railActive : COLORS.rail;
+    ctx.lineWidth = Math.max(1.6, (2.6 + rail.level * 0.7) * zoom);
     ctx.stroke();
 
     // sleepers
+    if (rail.level >= 2) {
+      ctx.strokeStyle = rail.level === 3 ? '#81E6FF' : COLORS.brass;
+      ctx.lineWidth = Math.max(0.8, 1.1 * zoom);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+
     if (zoom > 0.55) {
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -196,13 +238,15 @@ function drawTrains(ctx: CanvasRenderingContext2D, state: GameState, view: ViewS
 
 function drawCity(
   ctx: CanvasRenderingContext2D,
+  state: GameState,
   view: ViewState,
   city: City,
   scale: number,
 ) {
   const p = worldToScreen(view.camera, view.width, view.height, city.x, city.y);
   const r = TIER_RADIUS[city.tier] * scale;
-  const ratio = city.waitingPassengers / city.passengerCapacity;
+  const unlocked = state.unlockedContinents.has(city.continent);
+  const ratio = unlocked ? city.waitingPassengers / city.passengerCapacity : 0;
   const status = statusFor(city.waitingPassengers, city.passengerCapacity);
   const color = STATUS_COLOR[status];
   const isHover = view.hoverCityId === city.id;
@@ -240,12 +284,16 @@ function drawCity(
     ctx.stroke();
   }
 
-  ctx.fillStyle = city.connectedRailways.length > 0 ? COLORS.paper : COLORS.muted;
+  ctx.fillStyle = !unlocked
+    ? 'rgba(124,147,156,0.35)'
+    : city.connectedRailways.length > 0
+      ? COLORS.paper
+      : COLORS.muted;
   ctx.beginPath();
   ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = COLORS.land;
+  ctx.fillStyle = unlocked ? COLORS.land : 'rgba(8,13,15,0.55)';
   ctx.beginPath();
   ctx.arc(p.x, p.y, r * 0.45, 0, Math.PI * 2);
   ctx.fill();
@@ -258,7 +306,8 @@ function drawCity(
     ctx.stroke();
   }
 
-  const showLabel = view.camera.zoom > 0.5 || city.tier === 'large' || isHover || isSelected;
+  const showLabel =
+    unlocked && (view.camera.zoom > 0.5 || city.tier === 'large' || isHover || isSelected);
   if (showLabel) {
     const size = Math.max(10, Math.round(11.5 * Math.min(1.4, Math.max(0.75, view.camera.zoom))));
     ctx.font = `600 ${size}px "Barlow Condensed", "Arial Narrow", sans-serif`;
@@ -326,11 +375,12 @@ function drawBuildPreview(ctx: CanvasRenderingContext2D, state: GameState, view:
 export function drawScene(ctx: CanvasRenderingContext2D, state: GameState, view: ViewState) {
   drawBackground(ctx, view);
   drawRailways(ctx, state, view);
+  drawContinentLocks(ctx, state, view);
   drawBuildPreview(ctx, state, view);
 
   const scale = Math.min(1.5, Math.max(0.7, view.camera.zoom));
   for (const id of state.cityOrder) {
-    drawCity(ctx, view, state.cities.get(id)!, scale);
+    drawCity(ctx, state, view, state.cities.get(id)!, scale);
   }
 
   // trains last: a train dwelling in a station must never disappear under the node
@@ -347,6 +397,7 @@ export function cityAtScreen(
   let best: City | null = null;
   let bestDist = Infinity;
   for (const city of state.cities.values()) {
+    if (!state.unlockedContinents.has(city.continent)) continue;
     const p = worldToScreen(view.camera, view.width, view.height, city.x, city.y);
     const d = Math.hypot(p.x - sx, p.y - sy);
     const hit = TIER_RADIUS[city.tier] * scale + 12;
