@@ -198,6 +198,16 @@ export default function App() {
     setSnap(engine.snapshot());
   }, [engine, notify, pending]);
 
+  const upgradeRailway = useCallback(
+    (railwayId: string) => {
+      const result = engine.upgradeRailway(railwayId);
+      if (!result.ok) notify(result.error ?? 'Could not upgrade that line.', true);
+      else notify('Line upgraded. Trains run faster on this track.');
+      setSnap(engine.snapshot());
+    },
+    [engine, notify],
+  );
+
   const buyTrain = useCallback(
     (railwayId: string) => {
       const result = engine.buyTrain(railwayId);
@@ -376,10 +386,11 @@ export default function App() {
 
           {snap.railwayCount === 0 && !buildMode && (
             <div className="starter">
-              <p className="starter__eyebrow">Verrand Basin, opening day</p>
+              <p className="starter__eyebrow">Global network, opening day</p>
               <p className="starter__body">
-                Twenty-two towns, no track between them. Choose <b>Build railway</b>, pick two
-                stations, then put a train on the line before the platforms fill.
+                Major world cities, no track between them. Drag or zoom the globe, choose
+                <b>Build railway</b>, pick two stations, then put a train on the line before the
+                platforms fill.
               </p>
             </div>
           )}
@@ -423,6 +434,7 @@ export default function App() {
             lines={selectedLines}
             money={snap.money}
             onBuyTrain={buyTrain}
+            onUpgradeLine={upgradeRailway}
             onStartLine={startLineFrom}
             onClose={() => setPanel(null)}
           />
@@ -431,6 +443,7 @@ export default function App() {
           <TrainsPanel
             snap={snap}
             onBuyTrain={buyTrain}
+            onUpgradeLine={upgradeRailway}
             onSelectLine={(id) => {
               viewRef.current.selectedRailwayId = id;
             }}

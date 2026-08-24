@@ -7,6 +7,7 @@ interface Props {
   lines: RailwaySnapshot[];
   money: number;
   onBuyTrain: (railwayId: string) => void;
+  onUpgradeLine: (railwayId: string) => void;
   onStartLine: (cityId: string) => void;
   onClose: () => void;
 }
@@ -18,7 +19,15 @@ const STATUS_LABEL = {
   overloaded: 'Overloaded',
 } as const;
 
-export function CityPanel({ city, lines, money: cash, onBuyTrain, onStartLine, onClose }: Props) {
+export function CityPanel({
+  city,
+  lines,
+  money: cash,
+  onBuyTrain,
+  onUpgradeLine,
+  onStartLine,
+  onClose,
+}: Props) {
   const ratio = Math.min(1.35, city.waiting / city.capacity);
 
   return (
@@ -65,12 +74,14 @@ export function CityPanel({ city, lines, money: cash, onBuyTrain, onStartLine, o
             const other = line.fromId === city.id ? line.to : line.from;
             const full = line.trains >= line.capacity;
             const broke = cash < CONFIG.trainCost;
+            const canUpgrade = line.level < 3;
+            const upgradeBroke = cash < line.upgradeCost;
             return (
               <li key={line.id} className="line-list__row">
                 <div>
                   <span className="line-list__name">{other}</span>
                   <span className="line-list__meta">
-                    {Math.round(line.distance)} km · {line.trains}/{line.capacity} trains
+                    {Math.round(line.distance)} km · L{line.level} ({line.speedMultiplier}×) · {line.trains}/{line.capacity} trains
                   </span>
                 </div>
                 <button
@@ -80,6 +91,14 @@ export function CityPanel({ city, lines, money: cash, onBuyTrain, onStartLine, o
                   title={full ? 'Line at train capacity' : `Buy a train for ${money(CONFIG.trainCost)}`}
                 >
                   {full ? 'Full' : `Train ${money(CONFIG.trainCost)}`}
+                </button>
+                <button
+                  className="btn btn--small btn--ghost"
+                  disabled={!canUpgrade || upgradeBroke}
+                  onClick={() => onUpgradeLine(line.id)}
+                  title={!canUpgrade ? 'Already bullet train track' : `Upgrade for ${money(line.upgradeCost)}`}
+                >
+                  {canUpgrade ? `Upgrade ${money(line.upgradeCost)}` : 'Bullet'}
                 </button>
               </li>
             );

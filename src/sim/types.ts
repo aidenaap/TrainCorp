@@ -34,6 +34,7 @@ export interface Railway {
   /** max trains allowed on this line */
   capacity: number;
   constructionCost: number;
+  level: 1 | 2 | 3;
   trainIds: string[];
 }
 

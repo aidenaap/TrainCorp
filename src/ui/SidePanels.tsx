@@ -9,11 +9,13 @@ interface CloseProps {
 export function TrainsPanel({
   snap,
   onBuyTrain,
+  onUpgradeLine,
   onSelectLine,
   onClose,
 }: CloseProps & {
   snap: UiSnapshot;
   onBuyTrain: (id: string) => void;
+  onUpgradeLine: (id: string) => void;
   onSelectLine: (id: string) => void;
 }) {
   return (
@@ -35,6 +37,8 @@ export function TrainsPanel({
           {snap.railways.map((line) => {
             const full = line.trains >= line.capacity;
             const broke = snap.money < CONFIG.trainCost;
+            const canUpgrade = line.level < 3;
+            const upgradeBroke = snap.money < line.upgradeCost;
             return (
               <li key={line.id} className="line-list__row">
                 <button className="line-list__link" onClick={() => onSelectLine(line.id)}>
@@ -42,7 +46,7 @@ export function TrainsPanel({
                     {line.from} → {line.to}
                   </span>
                   <span className="line-list__meta">
-                    {Math.round(line.distance)} km · {line.trains}/{line.capacity} trains
+                    {Math.round(line.distance)} km · L{line.level} ({line.speedMultiplier}×) · {line.trains}/{line.capacity} trains
                   </span>
                 </button>
                 <button
@@ -51,6 +55,13 @@ export function TrainsPanel({
                   onClick={() => onBuyTrain(line.id)}
                 >
                   {full ? 'Full' : `Train ${money(CONFIG.trainCost)}`}
+                </button>
+                <button
+                  className="btn btn--small btn--ghost"
+                  disabled={!canUpgrade || upgradeBroke}
+                  onClick={() => onUpgradeLine(line.id)}
+                >
+                  {canUpgrade ? `Upgrade ${money(line.upgradeCost)}` : 'Bullet'}
                 </button>
               </li>
             );
