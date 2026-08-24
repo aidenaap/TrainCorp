@@ -209,26 +209,6 @@ export default function App() {
     [engine, notify],
   );
 
-  const chooseStartingContinent = useCallback(
-    (continentId: ContinentId) => {
-      const result = engine.chooseStartingContinent(continentId);
-      if (!result.ok) notify(result.error ?? 'Could not choose that continent.', true);
-      else notify('Headquarters opened. Start laying track.');
-      setSnap(engine.snapshot());
-    },
-    [engine, notify],
-  );
-
-  const unlockContinent = useCallback(
-    (continentId: ContinentId) => {
-      const result = engine.unlockContinent(continentId);
-      if (!result.ok) notify(result.error ?? 'Could not unlock that continent.', true);
-      else notify('New continent unlocked.');
-      setSnap(engine.snapshot());
-    },
-    [engine, notify],
-  );
-
   const buyTrain = useCallback(
     (railwayId: string) => {
       const result = engine.buyTrain(railwayId);

@@ -1,4 +1,4 @@
-import { CONTINENTS, HIGHLANDS, LAND, WATER, WORLD, type Poly } from '../sim/mapData';
+import { HIGHLANDS, LAND, WATER, WORLD, type Poly } from '../sim/mapData';
 import { statusFor } from '../sim/engine';
 import type { City, GameState } from '../sim/types';
 import { worldToScreen, type Camera } from './camera';
