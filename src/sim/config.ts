@@ -12,6 +12,10 @@ export const CONFIG = {
   continentUnlockBaseCost: 250_000,
   trainCost: 1_200,
   ticketMultiplier: 0.022,
+  stationUpgradeBaseCost: 1_800,
+  stationUpgradeCostPerMillion: 420,
+  stationRevenueBonusPerLevel: 0.18,
+  maxStationLevel: 3,
 
   // Trains
   trainCapacity: 90,

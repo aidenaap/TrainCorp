@@ -8,6 +8,7 @@ interface Props {
   money: number;
   onBuyTrain: (railwayId: string) => void;
   onUpgradeLine: (railwayId: string) => void;
+  onUpgradeStation: (cityId: string) => void;
   onStartLine: (cityId: string) => void;
   onClose: () => void;
 }
@@ -25,6 +26,7 @@ export function CityPanel({
   money: cash,
   onBuyTrain,
   onUpgradeLine,
+  onUpgradeStation,
   onStartLine,
   onClose,
 }: Props) {
@@ -53,15 +55,6 @@ export function CityPanel({
           <span className="gauge__status">{STATUS_LABEL[city.status]}</span>
         </div>
       </div>
-
-      <dl className="facts">
-        <Fact label="Population" value={compact(city.population)} />
-        <Fact label="Waiting" value={Math.round(city.waiting).toLocaleString()} />
-        <Fact label="Capacity" value={city.capacity.toLocaleString()} />
-        <Fact label="Lines" value={`${city.railways}`} />
-        <Fact label="Trains on lines" value={`${city.trains}`} />
-        <Fact label="Inbound now" value={`${city.inbound}`} />
-      </dl>
 
       <p className="panel__eyebrow">Connections</p>
       {lines.length === 0 ? (
@@ -105,6 +98,37 @@ export function CityPanel({
           })}
         </ul>
       )}
+
+
+      <div className="station-upgrades">
+        <p className="panel__eyebrow">Station upgrades</p>
+        <p className="line-list__meta">
+          Level {city.stationLevel} · {city.ticketMultiplier.toFixed(2)}× ticket value · {money(city.stationRevenue)} earned
+        </p>
+        <button
+          className="btn btn--wide"
+          disabled={city.stationUpgradeCost === 0 || cash < city.stationUpgradeCost}
+          onClick={() => onUpgradeStation(city.id)}
+          title={
+            city.stationUpgradeCost === 0
+              ? 'Station fully upgraded'
+              : `Upgrade station for ${money(city.stationUpgradeCost)}`
+          }
+        >
+          {city.stationUpgradeCost === 0
+            ? 'Fully upgraded'
+            : `Upgrade station · ${money(city.stationUpgradeCost)}`}
+        </button>
+      </div>
+
+      <dl className="facts">
+        <Fact label="Population" value={compact(city.population)} />
+        <Fact label="Waiting" value={Math.round(city.waiting).toLocaleString()} />
+        <Fact label="Capacity" value={city.capacity.toLocaleString()} />
+        <Fact label="Lines" value={`${city.railways}`} />
+        <Fact label="Trains on lines" value={`${city.trains}`} />
+        <Fact label="Inbound now" value={`${city.inbound}`} />
+      </dl>
 
       <button className="btn btn--wide" onClick={() => onStartLine(city.id)}>
         Build a line from {city.name}

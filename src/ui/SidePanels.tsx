@@ -1,10 +1,13 @@
 import { CONFIG } from '../sim/config';
-import type { UiSnapshot } from '../sim/engine';
+import { CONTINENTS } from '../sim/mapData';
+import type { CitySnapshot, UiSnapshot } from '../sim/engine';
 import { clock, compact, money } from './format';
 
 interface CloseProps {
   onClose: () => void;
 }
+
+const continentNames = new Map(CONTINENTS.map((continent) => [continent.id, continent.name]));
 
 export function TrainsPanel({
   snap,
@@ -33,8 +36,20 @@ export function TrainsPanel({
       {snap.railways.length === 0 ? (
         <p className="empty">Lay track first — trains need somewhere to run.</p>
       ) : (
-        <ul className="line-list">
-          {snap.railways.map((line) => {
+        [...continentNames.entries()].map(([continentId, continentName]) => {
+          const lines = snap.railways
+            .filter((line) => {
+              const from = snap.cities.find((city) => city.id === line.fromId);
+              const to = snap.cities.find((city) => city.id === line.toId);
+              return from?.continent === continentId || to?.continent === continentId;
+            })
+            .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+          if (lines.length === 0) return null;
+          return (
+            <section key={continentId} className="panel-section">
+              <p className="panel__eyebrow">{continentName}</p>
+              <ul className="line-list">
+                {lines.map((line) => {
             const full = line.trains >= line.capacity;
             const broke = snap.money < CONFIG.trainCost;
             const canUpgrade = line.level < 3;
@@ -65,9 +80,48 @@ export function TrainsPanel({
                 </button>
               </li>
             );
-          })}
-        </ul>
+                })}
+              </ul>
+            </section>
+          );
+        })
       )}
+    </aside>
+  );
+}
+
+export function StationsPanel({
+  snap,
+  onSelectStation,
+  onClose,
+}: CloseProps & { snap: UiSnapshot; onSelectStation: (id: string) => void }) {
+  const stations = [...snap.cities].sort(
+    (a, b) => a.continent.localeCompare(b.continent) || a.name.localeCompare(b.name),
+  );
+
+  return (
+    <aside className="panel">
+      <div className="panel__head">
+        <div>
+          <p className="panel__eyebrow">Stations</p>
+          <h2 className="panel__title">All stations</h2>
+        </div>
+        <button className="icon-btn" onClick={onClose} aria-label="Close panel">
+          ✕
+        </button>
+      </div>
+      <ul className="station-list">
+        {stations.map((station: CitySnapshot) => (
+          <li key={station.id} className="station-list__row">
+            <button className="line-list__link" onClick={() => onSelectStation(station.id)}>
+              <span className="line-list__name">{station.name}</span>
+              <span className="line-list__meta">
+                {continentNames.get(station.continent)} · L{station.stationLevel} · {money(station.stationRevenue)} earned
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </aside>
   );
 }

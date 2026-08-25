@@ -214,18 +214,40 @@ function drawTrains(ctx: CanvasRenderingContext2D, state: GameState, view: ViewS
     ctx.fill();
 
     const load = train.capacity > 0 ? train.onboard / train.capacity : 0;
+
+    // locomotive nose + cab silhouette instead of a plain marker
     ctx.fillStyle = COLORS.brass;
-    roundedRect(ctx, -length / 2, -width / 2, length, width, 3);
+    roundedRect(ctx, -length / 2, -width / 2, length * 0.72, width, 3);
     ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(length * 0.22, -width / 2);
+    ctx.lineTo(length / 2, -width * 0.18);
+    ctx.lineTo(length / 2, width * 0.18);
+    ctx.lineTo(length * 0.22, width / 2);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#1f3942';
+    roundedRect(ctx, -length * 0.26, -width * 0.33, length * 0.24, width * 0.32, 1.5);
+    ctx.fill();
+    roundedRect(ctx, length * 0.04, -width * 0.33, length * 0.18, width * 0.32, 1.5);
+    ctx.fill();
+
     ctx.strokeStyle = '#FFE0A8';
     ctx.lineWidth = 1;
-    ctx.stroke();
+    ctx.strokeRect(-length / 2 + 1, -width / 2 + 1, length * 0.7, width - 2);
 
     if (load > 0.01) {
       ctx.fillStyle = load > 0.85 ? COLORS.overloaded : COLORS.healthy;
       roundedRect(ctx, -length / 2 + 1, width / 2 - 3, (length - 2) * Math.min(1, load), 2.5, 1.2);
       ctx.fill();
     }
+
+    ctx.fillStyle = '#14100a';
+    ctx.beginPath();
+    ctx.arc(-length * 0.28, width / 2 + 0.5, Math.max(1.2, 1.6 * zoom), 0, Math.PI * 2);
+    ctx.arc(length * 0.2, width / 2 + 0.5, Math.max(1.2, 1.6 * zoom), 0, Math.PI * 2);
+    ctx.fill();
 
     // headlamp
     ctx.fillStyle = '#FFF3D6';
