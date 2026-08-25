@@ -41,6 +41,8 @@ export const CONFIG = {
   // Overcrowding thresholds (fraction of capacity)
   warningAt: 0.7,
   criticalAt: 0.9,
+  /** sim-seconds of accumulated overload before the run is lost (drains N× with N overloaded stations) */
+  overloadGraceSeconds: 300,
 
   // Simulation
   fixedStep: 1 / 60,

@@ -62,7 +62,7 @@ export function TrainsPanel({
                   const locked = line.bulletLocked;
                   const upgradeBroke = snap.money < line.upgradeCost;
                   return (
-                    <li key={line.id} className="line-list__row">
+                    <li key={line.id} className="line-list__row line-list__row--stacked">
                       <button className="line-list__link" onClick={() => onSelectLine(line.id)}>
                         <span className="line-list__name">
                           {line.from} → {line.to}
@@ -74,28 +74,30 @@ export function TrainsPanel({
                           </span>
                         </span>
                       </button>
-                      <button
-                        className="btn btn--small btn--teal"
-                        disabled={full || broke}
-                        onClick={() => onBuyTrain(line.id)}
-                        title={full ? 'Line at train capacity' : `Buy a train for ${money(CONFIG.trainCost)}`}
-                      >
-                        {full ? 'Full' : `Train ${money(CONFIG.trainCost)}`}
-                      </button>
-                      <button
-                        className="btn btn--small btn--teal btn--ghost"
-                        disabled={atBullet || locked || upgradeBroke}
-                        onClick={() => onUpgradeLine(line.id)}
-                        title={
-                          atBullet
-                            ? 'Already bullet train track'
-                            : locked
-                              ? 'Bullet track allowance full — unlock another continent'
-                              : `Upgrade for ${money(line.upgradeCost)}`
-                        }
-                      >
-                        {atBullet ? 'Bullet' : locked ? 'Locked' : `Upgrade ${money(line.upgradeCost)}`}
-                      </button>
+                      <div className="line-list__actions">
+                        <button
+                          className="btn btn--small btn--teal"
+                          disabled={full || broke}
+                          onClick={() => onBuyTrain(line.id)}
+                          title={full ? 'Line at train capacity' : `Buy a train for ${money(CONFIG.trainCost)}`}
+                        >
+                          {full ? 'Full' : `Train ${money(CONFIG.trainCost)}`}
+                        </button>
+                        <button
+                          className="btn btn--small btn--teal btn--ghost"
+                          disabled={atBullet || locked || upgradeBroke}
+                          onClick={() => onUpgradeLine(line.id)}
+                          title={
+                            atBullet
+                              ? 'Already bullet train track'
+                              : locked
+                                ? 'Bullet track allowance full — unlock another continent'
+                                : `Upgrade for ${money(line.upgradeCost)}`
+                          }
+                        >
+                          {atBullet ? 'Bullet' : locked ? 'Locked' : `Upgrade ${money(line.upgradeCost)}`}
+                        </button>
+                      </div>
                     </li>
                   );
                 })}

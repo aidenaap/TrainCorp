@@ -74,6 +74,13 @@ export interface Stats {
   recentRevenue: number[];
 }
 
+export interface BuildResult {
+  ok: boolean;
+  error?: string;
+}
+
+export type GameOutcome = 'playing' | 'won' | 'lost';
+
 export interface GameState {
   money: number;
   cities: Map<string, City>;
@@ -85,9 +92,8 @@ export interface GameState {
   routes: Map<string, Map<string, string>>;
   unlockedContinents: Set<ContinentId>;
   startingContinent: ContinentId | null;
-}
-
-export interface BuildResult {
-  ok: boolean;
-  error?: string;
+  outcome: GameOutcome;
+  /** accumulated overload pressure in sim-seconds */
+  overloadTimer: number;
+  overloadedCount: number;
 }

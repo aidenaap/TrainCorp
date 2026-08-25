@@ -445,6 +445,95 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.line-list__row--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.line-list__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.line-list__row--stacked .line-list__link {
+  width: 100%;
+}
+
+/* ------------------------------------------------------- win / lose */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(6, 10, 12, 0.9);
+  backdrop-filter: blur(3px);
+  --accent: var(--overloaded);
+}
+
+.overlay--won {
+  --accent: var(--teal);
+}
+
+.overlay__card {
+  width: min(520px, 100%);
+  padding: 28px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-top: 3px solid var(--accent);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.overlay__eyebrow {
+  margin: 0 0 6px;
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.overlay__title {
+  margin: 0 0 10px;
+  font-family: var(--display);
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.overlay__body {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.overlay__facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  text-align: left;
+}
+
+.overlay__actions {
+  display: flex;
+  justify-content: center;
+}
+
+.overlay__actions .btn {
+  min-width: 180px;
+}
+
+@media (max-width: 560px) {
+  .overlay__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 .line-list__trains {
   color: var(--teal);

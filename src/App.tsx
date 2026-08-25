@@ -10,6 +10,7 @@ import { CityPanel } from './ui/CityPanel';
 import { StationsPanel, StatsPanel, TrainsPanel } from './ui/SidePanels';
 import { BuildConfirm, Toolbar, type PendingBuild } from './ui/Toolbar';
 import { money } from './ui/format';
+import { GameOverlay } from './ui/GameOverlay';
 
 type PanelKind = 'city' | 'stations' | 'trains' | 'stats' | null;
 
@@ -537,6 +538,7 @@ export default function App() {
       <Toolbar
         buildMode={buildMode}
         buildStage={buildStage}
+        bulletsLeft={Math.max(0, snap.bulletLimit - snap.bulletUsed)}
         paused={paused}
         speed={speed}
         openPanel={panel === 'stations' || panel === 'trains' || panel === 'stats' ? panel : null}
@@ -556,6 +558,8 @@ export default function App() {
         }}
         onReset={resetGame}
       />
+
+      <GameOverlay snap={snap} onReplay={resetGame} />
     </div>
   );
 }

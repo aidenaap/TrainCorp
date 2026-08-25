@@ -14,6 +14,7 @@ export interface PendingBuild {
 interface Props {
   buildMode: boolean;
   buildStage: 'idle' | 'pickFirst' | 'pickSecond';
+  bulletsLeft: number;
   paused: boolean;
   speed: SpeedOption;
   openPanel: 'stations' | 'trains' | 'stats' | null;
@@ -27,6 +28,7 @@ interface Props {
 export function Toolbar({
   buildMode,
   buildStage,
+  bulletsLeft,
   paused,
   speed,
   openPanel,
@@ -47,7 +49,7 @@ export function Toolbar({
     <footer className="toolbar">
       <div className="toolbar__group">
         <button className={`btn${buildMode ? ' btn--armed' : ''}`} onClick={onToggleBuild}>
-          {buildMode ? 'Cancel build' : 'Build railway'}
+          {buildMode ? 'Cancel build' : `Build railway (${bulletsLeft})`}
         </button>
         <button
           className={`btn${openPanel === 'stations' ? ' btn--active' : ''}`}
