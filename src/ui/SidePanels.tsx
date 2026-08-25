@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { CONFIG } from '../sim/config';
 import { CONTINENTS } from '../sim/mapData';
 import type { CitySnapshot, UiSnapshot } from '../sim/engine';
@@ -33,6 +34,11 @@ export function TrainsPanel({
         </button>
       </div>
 
+      <p className="line-list__meta panel-note">
+        Bullet track <span className="line-list__trains">{snap.bulletUsed}/{snap.bulletLimit}</span>{' '}
+        · unlock continents for more
+      </p>
+
       {snap.railways.length === 0 ? (
         <p className="empty">Lay track first — trains need somewhere to run.</p>
       ) : (
@@ -50,36 +56,48 @@ export function TrainsPanel({
               <p className="panel__eyebrow">{continentName}</p>
               <ul className="line-list">
                 {lines.map((line) => {
-            const full = line.trains >= line.capacity;
-            const broke = snap.money < CONFIG.trainCost;
-            const canUpgrade = line.level < 3;
-            const upgradeBroke = snap.money < line.upgradeCost;
-            return (
-              <li key={line.id} className="line-list__row">
-                <button className="line-list__link" onClick={() => onSelectLine(line.id)}>
-                  <span className="line-list__name">
-                    {line.from} → {line.to}
-                  </span>
-                  <span className="line-list__meta">
-                    {Math.round(line.distance)} km · L{line.level} ({line.speedMultiplier}×) · {line.trains}/{line.capacity} trains
-                  </span>
-                </button>
-                <button
-                  className="btn btn--small"
-                  disabled={full || broke}
-                  onClick={() => onBuyTrain(line.id)}
-                >
-                  {full ? 'Full' : `Train ${money(CONFIG.trainCost)}`}
-                </button>
-                <button
-                  className="btn btn--small btn--ghost"
-                  disabled={!canUpgrade || upgradeBroke}
-                  onClick={() => onUpgradeLine(line.id)}
-                >
-                  {canUpgrade ? `Upgrade ${money(line.upgradeCost)}` : 'Bullet'}
-                </button>
-              </li>
-            );
+                  const full = line.trains >= line.capacity;
+                  const broke = snap.money < CONFIG.trainCost;
+                  const atBullet = line.level >= 3;
+                  const locked = line.bulletLocked;
+                  const upgradeBroke = snap.money < line.upgradeCost;
+                  return (
+                    <li key={line.id} className="line-list__row">
+                      <button className="line-list__link" onClick={() => onSelectLine(line.id)}>
+                        <span className="line-list__name">
+                          {line.from} → {line.to}
+                        </span>
+                        <span className="line-list__meta">
+                          {Math.round(line.distance)} km · L{line.level} ({line.speedMultiplier}×) ·{' '}
+                          <span className="line-list__trains">
+                            {line.trains}/{line.capacity} trains
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        className="btn btn--small btn--teal"
+                        disabled={full || broke}
+                        onClick={() => onBuyTrain(line.id)}
+                        title={full ? 'Line at train capacity' : `Buy a train for ${money(CONFIG.trainCost)}`}
+                      >
+                        {full ? 'Full' : `Train ${money(CONFIG.trainCost)}`}
+                      </button>
+                      <button
+                        className="btn btn--small btn--teal btn--ghost"
+                        disabled={atBullet || locked || upgradeBroke}
+                        onClick={() => onUpgradeLine(line.id)}
+                        title={
+                          atBullet
+                            ? 'Already bullet train track'
+                            : locked
+                              ? 'Bullet track allowance full — unlock another continent'
+                              : `Upgrade for ${money(line.upgradeCost)}`
+                        }
+                      >
+                        {atBullet ? 'Bullet' : locked ? 'Locked' : `Upgrade ${money(line.upgradeCost)}`}
+                      </button>
+                    </li>
+                  );
                 })}
               </ul>
             </section>
@@ -90,14 +108,31 @@ export function TrainsPanel({
   );
 }
 
+type StationSort = 'earnings' | 'continent';
+
+
+
 export function StationsPanel({
   snap,
   onSelectStation,
+  onUpgradeStation,
   onClose,
-}: CloseProps & { snap: UiSnapshot; onSelectStation: (id: string) => void }) {
-  const stations = [...snap.cities].sort(
-    (a, b) => a.continent.localeCompare(b.continent) || a.name.localeCompare(b.name),
-  );
+}: CloseProps & {
+  snap: UiSnapshot;
+  onSelectStation: (id: string) => void;
+  onUpgradeStation: (id: string) => void;
+}) {
+  const [sort, setSort] = useState<StationSort>('earnings');
+
+  const stations = useMemo(() => {
+    const open = snap.cities.filter((c) => c.unlocked);
+    return sort === 'earnings'
+      ? open.sort((a, b) => b.stationRevenue - a.stationRevenue || a.name.localeCompare(b.name))
+      : open.sort(
+          (a, b) =>
+            a.continent.localeCompare(b.continent) || b.stationRevenue - a.stationRevenue,
+        );
+  }, [snap.cities, sort]);
 
   return (
     <aside className="panel">
@@ -106,21 +141,58 @@ export function StationsPanel({
           <p className="panel__eyebrow">Stations</p>
           <h2 className="panel__title">All stations</h2>
         </div>
-        <button className="icon-btn" onClick={onClose} aria-label="Close panel">
-          ✕
-        </button>
-      </div>
-      <ul className="station-list">
-        {stations.map((station: CitySnapshot) => (
-          <li key={station.id} className="station-list__row">
-            <button className="line-list__link" onClick={() => onSelectStation(station.id)}>
-              <span className="line-list__name">{station.name}</span>
-              <span className="line-list__meta">
-                {continentNames.get(station.continent)} · L{station.stationLevel} · {money(station.stationRevenue)} earned
-              </span>
+        <div className="panel__head-actions">
+          <div className="pill" role="group" aria-label="Sort stations">
+            <button
+              className={`pill__btn${sort === 'earnings' ? ' is-active' : ''}`}
+              onClick={() => setSort('earnings')}
+            >
+              Earnings
             </button>
-          </li>
-        ))}
+            <button
+              className={`pill__btn${sort === 'continent' ? ' is-active' : ''}`}
+              onClick={() => setSort('continent')}
+            >
+              Continent
+            </button>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Close panel">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <ul className="station-list">
+        {stations.map((station: CitySnapshot, i: number) => {
+          const maxed = station.stationUpgradeCost === 0;
+          const broke = snap.money < station.stationUpgradeCost;
+          return (
+            <li key={station.id} className="station-list__row">
+              <button className="line-list__link" onClick={() => onSelectStation(station.id)}>
+                <span className="line-list__name">
+                  {sort === 'earnings' && <span className="station-list__rank">{i + 1}</span>}
+                  {station.name}
+                </span>
+                <span className="line-list__meta">
+                  {continentNames.get(station.continent)} · L{station.stationLevel} ·{' '}
+                  <span className="line-list__trains">{money(station.stationRevenue)}</span> earned
+                </span>
+              </button>
+              <button
+                className="btn btn--small btn--teal"
+                disabled={maxed || broke}
+                onClick={() => onUpgradeStation(station.id)}
+                title={
+                  maxed
+                    ? 'Station fully upgraded'
+                    : `Upgrade station for ${money(station.stationUpgradeCost)}`
+                }
+              >
+                {maxed ? 'Max' : `L${station.stationLevel + 1} ${money(station.stationUpgradeCost)}`}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </aside>
   );

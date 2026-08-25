@@ -31,6 +31,7 @@ export function CityPanel({
   onClose,
 }: Props) {
   const ratio = Math.min(1.35, city.waiting / city.capacity);
+  const stationMaxed = city.stationUpgradeCost === 0;
 
   return (
     <aside className="panel">
@@ -67,18 +68,22 @@ export function CityPanel({
             const other = line.fromId === city.id ? line.to : line.from;
             const full = line.trains >= line.capacity;
             const broke = cash < CONFIG.trainCost;
-            const canUpgrade = line.level < 3;
+            const atBullet = line.level >= 3;
+            const locked = line.bulletLocked;
             const upgradeBroke = cash < line.upgradeCost;
             return (
               <li key={line.id} className="line-list__row">
-                <div>
+                <div className="line-list__link">
                   <span className="line-list__name">{other}</span>
                   <span className="line-list__meta">
-                    {Math.round(line.distance)} km · L{line.level} ({line.speedMultiplier}×) · {line.trains}/{line.capacity} trains
+                    {Math.round(line.distance)} km · L{line.level} ({line.speedMultiplier}×) ·{' '}
+                    <span className="line-list__trains">
+                      {line.trains}/{line.capacity} trains
+                    </span>
                   </span>
                 </div>
                 <button
-                  className="btn btn--small"
+                  className="btn btn--small btn--teal"
                   disabled={full || broke}
                   onClick={() => onBuyTrain(line.id)}
                   title={full ? 'Line at train capacity' : `Buy a train for ${money(CONFIG.trainCost)}`}
@@ -86,12 +91,18 @@ export function CityPanel({
                   {full ? 'Full' : `Train ${money(CONFIG.trainCost)}`}
                 </button>
                 <button
-                  className="btn btn--small btn--ghost"
-                  disabled={!canUpgrade || upgradeBroke}
+                  className="btn btn--small btn--teal btn--ghost"
+                  disabled={atBullet || locked || upgradeBroke}
                   onClick={() => onUpgradeLine(line.id)}
-                  title={!canUpgrade ? 'Already bullet train track' : `Upgrade for ${money(line.upgradeCost)}`}
+                  title={
+                    atBullet
+                      ? 'Already bullet train track'
+                      : locked
+                        ? 'Bullet track allowance full — unlock another continent'
+                        : `Upgrade for ${money(line.upgradeCost)}`
+                  }
                 >
-                  {canUpgrade ? `Upgrade ${money(line.upgradeCost)}` : 'Bullet'}
+                  {atBullet ? 'Bullet' : locked ? 'Locked' : `Upgrade ${money(line.upgradeCost)}`}
                 </button>
               </li>
             );
@@ -99,28 +110,32 @@ export function CityPanel({
         </ul>
       )}
 
+      <p className="panel__eyebrow">Station upgrade</p>
+      <ul className="line-list">
+        <li className="line-list__row line-list__row--solo">
+          <div className="line-list__link">
+            <span className="line-list__name">Level {city.stationLevel}</span>
+            <span className="line-list__meta">
+              {city.ticketMultiplier.toFixed(2)}× ticket value ·{' '}
+              <span className="line-list__trains">{money(city.stationRevenue)}</span> earned
+            </span>
+          </div>
+          <button
+            className="btn btn--small btn--teal"
+            disabled={stationMaxed || cash < city.stationUpgradeCost}
+            onClick={() => onUpgradeStation(city.id)}
+            title={
+              stationMaxed
+                ? 'Station fully upgraded'
+                : `Upgrade station for ${money(city.stationUpgradeCost)}`
+            }
+          >
+            {stationMaxed ? 'Max' : `L${city.stationLevel + 1} ${money(city.stationUpgradeCost)}`}
+          </button>
+        </li>
+      </ul>
 
-      <div className="station-upgrades">
-        <p className="panel__eyebrow">Station upgrades</p>
-        <p className="line-list__meta">
-          Level {city.stationLevel} · {city.ticketMultiplier.toFixed(2)}× ticket value · {money(city.stationRevenue)} earned
-        </p>
-        <button
-          className="btn btn--wide"
-          disabled={city.stationUpgradeCost === 0 || cash < city.stationUpgradeCost}
-          onClick={() => onUpgradeStation(city.id)}
-          title={
-            city.stationUpgradeCost === 0
-              ? 'Station fully upgraded'
-              : `Upgrade station for ${money(city.stationUpgradeCost)}`
-          }
-        >
-          {city.stationUpgradeCost === 0
-            ? 'Fully upgraded'
-            : `Upgrade station · ${money(city.stationUpgradeCost)}`}
-        </button>
-      </div>
-
+      <p className="panel__eyebrow">Operations</p>
       <dl className="facts">
         <Fact label="Population" value={compact(city.population)} />
         <Fact label="Waiting" value={Math.round(city.waiting).toLocaleString()} />
@@ -130,7 +145,7 @@ export function CityPanel({
         <Fact label="Inbound now" value={`${city.inbound}`} />
       </dl>
 
-      <button className="btn btn--wide" onClick={() => onStartLine(city.id)}>
+      <button className="btn btn--wide btn--teal" onClick={() => onStartLine(city.id)}>
         Build a line from {city.name}
       </button>
     </aside>

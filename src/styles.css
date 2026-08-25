@@ -411,13 +411,8 @@ button {
   margin-bottom: 16px;
 }
 
-.station-upgrades {
-  display: grid;
-  gap: 8px;
-  margin: 0 0 18px;
-  padding: 10px;
-  background: rgba(55, 214, 200, 0.06);
-  border: 1px solid var(--teal-dim);
+.panel-note {
+  margin: -4px 0 14px;
 }
 
 .line-list {
@@ -429,16 +424,32 @@ button {
   gap: 6px;
 }
 
+
 .line-list__row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 104px;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 10px;
   background: var(--panel-2);
   border: 1px solid var(--edge);
 }
+.line-list__row--solo {
+  grid-template-columns: minmax(0, 1fr) 104px;
+}
+
+.line-list__row .btn--small {
+  width: 100%;
+  padding: 6px 4px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-list__trains {
+  color: var(--teal);
+}
+
 
 .line-list__link {
   display: flex;
@@ -535,6 +546,70 @@ button {
   color: var(--tone);
 }
 
+.station-list__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+}
+
+.station-list__row .btn--small {
+  width: 100%;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.station-list__rank {
+  display: inline-block;
+  min-width: 22px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--teal);
+}
+
+.panel__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pill {
+  display: inline-flex;
+  border: 1px solid var(--teal-dim);
+  overflow: hidden;
+}
+
+.pill__btn {
+  padding: 5px 9px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.pill__btn + .pill__btn {
+  border-left: 1px solid var(--teal-dim);
+}
+
+.pill__btn:hover:not(.is-active) {
+  color: var(--teal);
+}
+
+.pill__btn.is-active {
+  background: var(--teal);
+  color: #06201e;
+  font-weight: 600;
+}
+
 /* --------------------------------------------------------------- buttons */
 
 .btn {
@@ -595,6 +670,25 @@ button {
 
 .btn--ghost {
   background: transparent;
+}
+
+.btn--teal {
+  border-color: var(--teal-dim);
+  color: var(--teal);
+}
+
+.btn--teal:hover:not(:disabled) {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: rgba(55, 214, 200, 0.12);
+}
+
+.btn--teal.btn--ghost {
+  background: transparent;
+}
+
+.btn--teal.btn--ghost:hover:not(:disabled) {
+  background: rgba(55, 214, 200, 0.1);
 }
 
 :focus-visible {
@@ -750,8 +844,21 @@ button {
   left: 16px;
   bottom: 16px;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
-  max-width: min(680px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  overflow-x: auto;
+  scrollbar-width: none;
   z-index: 3;
+}
+
+.continent-unlocks::-webkit-scrollbar {
+  display: none;
+}
+
+.continent-unlocks .btn {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
 }

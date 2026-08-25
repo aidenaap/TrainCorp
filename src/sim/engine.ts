@@ -149,6 +149,34 @@ export class GameEngine {
 
   // ---------------------------------------------------------------- economy
 
+  /** Track and upgrade prices rise with each continent opened, freezing at 5 of 6. */
+  expansionMultiplier(): number {
+    const opened = Math.min(
+      this.state.unlockedContinents.size,
+      CONFIG.expansionCostCapContinents,
+    );
+    return 1 + Math.max(0, opened - 1) * CONFIG.expansionCostStep;
+  }
+
+  /** Total level-3 lines allowed: Asia grants 3, every other unlocked continent grants 2. */
+  bulletLineLimit(): number {
+    let limit = 0;
+    for (const id of this.state.unlockedContinents) {
+      limit += id === 'asia' ? CONFIG.bulletLinesAsia : CONFIG.bulletLinesPerContinent;
+    }
+    return limit;
+  }
+
+  bulletLineCount(): number {
+    let n = 0;
+    for (const r of this.state.railways.values()) if (r.level === 3) n++;
+    return n;
+  }
+
+  canUpgradeToBullet(): boolean {
+    return this.bulletLineCount() < this.bulletLineLimit();
+  }
+
   stationCost(city: City): number {
     const millions = city.population / 1_000_000;
     const scaled = CONFIG.stationCostBase + millions * CONFIG.stationCostPerMillion;
@@ -157,12 +185,13 @@ export class GameEngine {
     );
   }
 
-  railwayCost(a: City, b: City): number {
+    railwayCost(a: City, b: City): number {
     return Math.round(
-      CONFIG.railwayBaseCost +
+      (CONFIG.railwayBaseCost +
         distanceBetween(a, b) * CONFIG.railwayCostPerUnit +
         this.stationCost(a) +
-        this.stationCost(b),
+        this.stationCost(b)) *
+        this.expansionMultiplier(),
     );
   }
 
@@ -171,20 +200,22 @@ export class GameEngine {
     const millions = city.population / 1_000_000;
     return Math.round(
       (CONFIG.stationUpgradeBaseCost + millions * CONFIG.stationUpgradeCostPerMillion) *
-        city.stationLevel,
+        city.stationLevel *
+        this.expansionMultiplier(),
     );
-  }
-
-  stationTicketMultiplier(city: City): number {
-    return 1 + (city.stationLevel - 1) * CONFIG.stationRevenueBonusPerLevel;
   }
 
   lineUpgradeCost(railway: Railway): number {
     if (railway.level >= 3) return 0;
     return Math.round(
-      CONFIG.lineUpgradeBaseCost * railway.level +
-        railway.distance * CONFIG.lineUpgradeCostPerUnit * railway.level,
+      (CONFIG.lineUpgradeBaseCost * railway.level +
+        railway.distance * CONFIG.lineUpgradeCostPerUnit * railway.level) *
+        this.expansionMultiplier(),
     );
+  }
+
+  stationTicketMultiplier(city: City): number {
+    return 1 + (city.stationLevel - 1) * CONFIG.stationRevenueBonusPerLevel;
   }
 
   findRailwayBetween(a: string, b: string): Railway | undefined {
@@ -233,6 +264,12 @@ export class GameEngine {
     const railway = this.state.railways.get(railwayId);
     if (!railway) return { ok: false, error: 'Unknown line.' };
     if (railway.level >= 3) return { ok: false, error: 'This line is already bullet train track.' };
+    if (railway.level === 2 && !this.canUpgradeToBullet()) {
+      return {
+        ok: false,
+        error: `Bullet track allowance is full (${this.bulletLineCount()}/${this.bulletLineLimit()}). Unlock another continent.`,
+      };
+    }
     const cost = this.lineUpgradeCost(railway);
     if (this.state.money < cost) {
       return { ok: false, error: `Short by $${Math.ceil(cost - this.state.money).toLocaleString()}.` };
@@ -492,6 +529,10 @@ export class GameEngine {
       };
     });
 
+    const bulletUsed = this.bulletLineCount();
+    const bulletLimit = this.bulletLineLimit();
+    const bulletFree = bulletUsed < bulletLimit;
+
     return {
       money: this.state.money,
       delivered: stats.totalDelivered,
@@ -501,6 +542,9 @@ export class GameEngine {
       railwayCount: this.state.railways.size,
       trainCount: this.state.trains.size,
       networkHealth: this.networkHealth(),
+      bulletUsed,
+      bulletLimit,
+      expansionMultiplier: this.expansionMultiplier(),
       cities,
       continents: CONTINENTS.map((c) => ({
         ...c,
@@ -521,6 +565,7 @@ export class GameEngine {
         level: r.level,
         speedMultiplier: CONFIG.lineLevelSpeed[r.level],
         upgradeCost: this.lineUpgradeCost(r),
+        bulletLocked: r.level === 2 && !bulletFree,
       })),
     };
   }
@@ -566,6 +611,7 @@ export interface RailwaySnapshot {
   level: 1 | 2 | 3;
   speedMultiplier: number;
   upgradeCost: number;
+  bulletLocked: boolean;
 }
 
 export interface UiSnapshot {
@@ -577,6 +623,9 @@ export interface UiSnapshot {
   railwayCount: number;
   trainCount: number;
   networkHealth: number;
+  bulletUsed: number;
+  bulletLimit: number;
+  expansionMultiplier: number;
   cities: CitySnapshot[];
   continents: ContinentSnapshot[];
   needsStartingContinent: boolean;

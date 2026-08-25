@@ -527,6 +527,7 @@ export default function App() {
               setSelectedCityId(id);
               setPanel('city');
             }}
+            onUpgradeStation={upgradeStation}
             onClose={() => setPanel(null)}
           />
         )}

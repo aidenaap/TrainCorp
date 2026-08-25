@@ -17,6 +17,14 @@ export const CONFIG = {
   stationRevenueBonusPerLevel: 0.18,
   maxStationLevel: 3,
 
+  // Expansion pressure: track + upgrades climb per continent opened, capped at 5 of 6.
+  expansionCostStep: 0.22,
+  expansionCostCapContinents: 5,
+
+  // Bullet (level 3) track allowance granted per unlocked continent.
+  bulletLinesPerContinent: 2,
+  bulletLinesAsia: 3,
+
   // Trains
   trainCapacity: 90,
   trainSpeed: 62, // world units per second
