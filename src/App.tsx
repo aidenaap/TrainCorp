@@ -7,11 +7,11 @@ import { zoomAt } from './render/camera';
 import { cityAtScreen, drawScene, type ViewState } from './render/renderer';
 import { Hud } from './ui/Hud';
 import { CityPanel } from './ui/CityPanel';
-import { StatsPanel, TrainsPanel } from './ui/SidePanels';
+import { StationsPanel, StatsPanel, TrainsPanel } from './ui/SidePanels';
 import { BuildConfirm, Toolbar, type PendingBuild } from './ui/Toolbar';
 import { money } from './ui/format';
 
-type PanelKind = 'city' | 'trains' | 'stats' | null;
+type PanelKind = 'city' | 'stations' | 'trains' | 'stats' | null;
 
 export default function App() {
   const engineRef = useRef<GameEngine | null>(null);
@@ -224,6 +224,16 @@ export default function App() {
       const result = engine.unlockContinent(continentId);
       if (!result.ok) notify(result.error ?? 'Could not unlock that continent.', true);
       else notify('New continent unlocked.');
+      setSnap(engine.snapshot());
+    },
+    [engine, notify],
+  );
+
+  const upgradeStation = useCallback(
+    (cityId: string) => {
+      const result = engine.upgradeStation(cityId);
+      if (!result.ok) notify(result.error ?? 'Could not upgrade that station.', true);
+      else notify('Station upgraded. Tickets from this station are worth more.');
       setSnap(engine.snapshot());
     },
     [engine, notify],
@@ -494,6 +504,7 @@ export default function App() {
             money={snap.money}
             onBuyTrain={buyTrain}
             onUpgradeLine={upgradeRailway}
+            onUpgradeStation={upgradeStation}
             onStartLine={startLineFrom}
             onClose={() => setPanel(null)}
           />
@@ -509,6 +520,16 @@ export default function App() {
             onClose={() => setPanel(null)}
           />
         )}
+        {panel === 'stations' && (
+          <StationsPanel
+            snap={snap}
+            onSelectStation={(id) => {
+              setSelectedCityId(id);
+              setPanel('city');
+            }}
+            onClose={() => setPanel(null)}
+          />
+        )}
         {panel === 'stats' && <StatsPanel snap={snap} onClose={() => setPanel(null)} />}
       </main>
 
@@ -517,7 +538,7 @@ export default function App() {
         buildStage={buildStage}
         paused={paused}
         speed={speed}
-        openPanel={panel === 'trains' || panel === 'stats' ? panel : null}
+        openPanel={panel === 'stations' || panel === 'trains' || panel === 'stats' ? panel : null}
         onToggleBuild={() => {
           if (buildMode) exitBuildMode();
           else {

@@ -13,6 +13,8 @@
   --critical: #ee8a3c;
   --overloaded: #e05c4b;
   --preview: #7fd4e8;
+  --teal: #37d6c8;
+  --teal-dim: #1b7f7a;
 
   --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --body: 'Barlow', system-ui, sans-serif;
@@ -296,7 +298,8 @@ button {
   font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--teal);
+  text-shadow: 0 0 12px rgba(55, 214, 200, 0.18);
 }
 
 .panel__title {
@@ -404,6 +407,19 @@ button {
   color: var(--muted);
 }
 
+.panel-section {
+  margin-bottom: 16px;
+}
+
+.station-upgrades {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 10px;
+  background: rgba(55, 214, 200, 0.06);
+  border: 1px solid var(--teal-dim);
+}
+
 .line-list {
   list-style: none;
   margin: 0 0 16px;
@@ -449,6 +465,25 @@ button {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
+}
+
+.station-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.station-list__row {
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+}
+
+.station-list__row:hover {
+  border-color: var(--teal-dim);
 }
 
 .pressure {

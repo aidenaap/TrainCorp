@@ -63,6 +63,8 @@ export class GameEngine {
         tier,
         continent: seed.continent,
         passengerCapacity: TIER_CAPACITY[tier],
+        stationLevel: 1,
+        stationRevenue: 0,
         demand: new Map(),
         waitingPassengers: 0,
         connectedRailways: [],
@@ -164,6 +166,19 @@ export class GameEngine {
     );
   }
 
+  stationUpgradeCost(city: City): number {
+    if (city.stationLevel >= CONFIG.maxStationLevel) return 0;
+    const millions = city.population / 1_000_000;
+    return Math.round(
+      (CONFIG.stationUpgradeBaseCost + millions * CONFIG.stationUpgradeCostPerMillion) *
+        city.stationLevel,
+    );
+  }
+
+  stationTicketMultiplier(city: City): number {
+    return 1 + (city.stationLevel - 1) * CONFIG.stationRevenueBonusPerLevel;
+  }
+
   lineUpgradeCost(railway: Railway): number {
     if (railway.level >= 3) return 0;
     return Math.round(
@@ -223,6 +238,22 @@ export class GameEngine {
       return { ok: false, error: `Short by $${Math.ceil(cost - this.state.money).toLocaleString()}.` };
     }
     railway.level = (railway.level + 1) as Railway['level'];
+    this.state.money -= cost;
+    this.state.stats.totalSpent += cost;
+    return { ok: true };
+  }
+
+  upgradeStation(cityId: string): BuildResult {
+    const city = this.state.cities.get(cityId);
+    if (!city) return { ok: false, error: 'Unknown station.' };
+    if (city.stationLevel >= CONFIG.maxStationLevel) {
+      return { ok: false, error: 'This station is already fully upgraded.' };
+    }
+    const cost = this.stationUpgradeCost(city);
+    if (this.state.money < cost) {
+      return { ok: false, error: `Short by $${Math.ceil(cost - this.state.money).toLocaleString()}.` };
+    }
+    city.stationLevel += 1;
     this.state.money -= cost;
     this.state.stats.totalSpent += cost;
     return { ok: true };
@@ -357,10 +388,14 @@ export class GameEngine {
     train.direction = train.direction === 1 ? -1 : 1;
 
     const station = this.state.cities.get(stationId)!;
-    const legValue = railway.distance * CONFIG.ticketMultiplier;
+    const previousStation = this.state.cities.get(continuingTo)!;
+    const legValue =
+      railway.distance * CONFIG.ticketMultiplier * this.stationTicketMultiplier(previousStation);
 
     for (const [destId, group] of [...train.passengers]) {
-      group.fare += group.count * legValue;
+      const legFare = group.count * legValue;
+      group.fare += legFare;
+      previousStation.stationRevenue += legFare;
 
       if (destId === stationId) {
         this.state.money += group.fare;
@@ -450,6 +485,10 @@ export class GameEngine {
         inbound,
         continent: c.continent,
         unlocked: this.state.unlockedContinents.has(c.continent),
+        stationLevel: c.stationLevel,
+        stationRevenue: c.stationRevenue,
+        stationUpgradeCost: this.stationUpgradeCost(c),
+        ticketMultiplier: this.stationTicketMultiplier(c),
       };
     });
 
@@ -499,6 +538,10 @@ export interface CitySnapshot {
   inbound: number;
   continent: ContinentId;
   unlocked: boolean;
+  stationLevel: number;
+  stationRevenue: number;
+  stationUpgradeCost: number;
+  ticketMultiplier: number;
 }
 
 export interface ContinentSnapshot {

@@ -25,6 +25,8 @@ export interface City {
   continent: ContinentId;
 
   passengerCapacity: number;
+  stationLevel: number;
+  stationRevenue: number;
   /** destinationCityId -> aggregated demand waiting here */
   demand: Map<string, Demand>;
   waitingPassengers: number;

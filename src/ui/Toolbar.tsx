@@ -16,9 +16,9 @@ interface Props {
   buildStage: 'idle' | 'pickFirst' | 'pickSecond';
   paused: boolean;
   speed: SpeedOption;
-  openPanel: 'trains' | 'stats' | null;
+  openPanel: 'stations' | 'trains' | 'stats' | null;
   onToggleBuild: () => void;
-  onOpenPanel: (panel: 'trains' | 'stats') => void;
+  onOpenPanel: (panel: 'stations' | 'trains' | 'stats') => void;
   onTogglePause: () => void;
   onSpeed: (speed: SpeedOption) => void;
   onReset: () => void;
@@ -48,6 +48,12 @@ export function Toolbar({
       <div className="toolbar__group">
         <button className={`btn${buildMode ? ' btn--armed' : ''}`} onClick={onToggleBuild}>
           {buildMode ? 'Cancel build' : 'Build railway'}
+        </button>
+        <button
+          className={`btn${openPanel === 'stations' ? ' btn--active' : ''}`}
+          onClick={() => onOpenPanel('stations')}
+        >
+          Stations
         </button>
         <button
           className={`btn${openPanel === 'trains' ? ' btn--active' : ''}`}
