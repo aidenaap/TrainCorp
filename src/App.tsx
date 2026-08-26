@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GameEngine, type UiSnapshot } from './sim/engine';
 import type { ContinentId } from './sim/types';
 import { CONFIG, type SpeedOption } from './sim/config';
-import { clampCamera, createCamera, fitCamera, screenToWorld } from './render/camera';
+import {
+  clampCamera,
+  createCamera,
+  enforceCameraBounds,
+  fitCamera,
+  screenToWorld,
+} from './render/camera';
 import { zoomAt } from './render/camera';
 import { cityAtScreen, drawScene, type ViewState } from './render/renderer';
 import { Hud } from './ui/Hud';
@@ -91,6 +97,8 @@ export default function App() {
       if (!fitted) {
         fitCamera(view.camera, w, h);
         fitted = true;
+      } else {
+        enforceCameraBounds(view.camera, w, h);
       }
     };
     syncSize();
@@ -320,7 +328,7 @@ export default function App() {
       if (drag.current.moved) {
         view.camera.x -= dx / view.camera.zoom;
         view.camera.y -= dy / view.camera.zoom;
-        clampCamera(view.camera);
+        clampCamera(view.camera, view.width, view.height);
         drag.current.x = p.x;
         drag.current.y = p.y;
       }
@@ -358,7 +366,6 @@ export default function App() {
     const view = viewRef.current;
     const p = localPoint(e);
     zoomAt(view.camera, view.width, view.height, p.x, p.y, e.deltaY < 0 ? 1.12 : 1 / 1.12);
-    clampCamera(view.camera);
   };
 
   // -------------------------------------------------------------- keyboard

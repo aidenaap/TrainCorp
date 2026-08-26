@@ -1,4 +1,5 @@
-import { CONTINENTS, HIGHLANDS, WATER, WORLD, WORLD_LAND, type Poly } from '../sim/mapData';
+import { CONTINENTS, type Poly } from '../sim/mapData';
+import { drawMapBackground } from './mapLayer';
 import { statusFor } from '../sim/engine';
 import type { City, GameState } from '../sim/types';
 import { worldToScreen, type Camera } from './camera';
@@ -54,59 +55,7 @@ function tracePoly(ctx: CanvasRenderingContext2D, view: ViewState, poly: Poly) {
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, view: ViewState) {
-  ctx.fillStyle = COLORS.void;
-  ctx.fillRect(0, 0, view.width, view.height);
-
-  const tl = worldToScreen(view.camera, view.width, view.height, 0, 0);
-  const br = worldToScreen(view.camera, view.width, view.height, WORLD.width, WORLD.height);
-  ctx.fillStyle = COLORS.water;
-  ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-
-  for (const poly of WORLD_LAND) {
-    tracePoly(ctx, view, poly);
-    ctx.fillStyle = COLORS.land;
-    ctx.fill();
-    ctx.strokeStyle = COLORS.landEdge;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-
-  // survey grid
-  const step = 100;
-  ctx.strokeStyle = COLORS.grid;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let x = 0; x <= WORLD.width; x += step) {
-    const a = worldToScreen(view.camera, view.width, view.height, x, 0);
-    const b = worldToScreen(view.camera, view.width, view.height, x, WORLD.height);
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-  }
-  for (let y = 0; y <= WORLD.height; y += step) {
-    const a = worldToScreen(view.camera, view.width, view.height, 0, y);
-    const b = worldToScreen(view.camera, view.width, view.height, WORLD.width, y);
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-  }
-  ctx.stroke();
-
-  for (const poly of HIGHLANDS) {
-    tracePoly(ctx, view, poly);
-    ctx.fillStyle = COLORS.highland;
-    ctx.fill();
-    ctx.strokeStyle = COLORS.landEdge;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-
-  for (const poly of WATER) {
-    tracePoly(ctx, view, poly);
-    ctx.fillStyle = COLORS.water;
-    ctx.fill();
-    ctx.strokeStyle = COLORS.waterEdge;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
+  drawMapBackground(ctx, view);
 }
 
 function drawContinentLocks(ctx: CanvasRenderingContext2D, state: GameState, view: ViewState) {
