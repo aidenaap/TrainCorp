@@ -5,6 +5,7 @@ import type {
   BuildResult,
   City,
   Demand,
+  GameOutcome,
   GameState,
   LoadStatus,
   Railway,
@@ -88,6 +89,9 @@ export class GameEngine {
       routes: new Map(),
       unlockedContinents: new Set(),
       startingContinent: null,
+      outcome: 'playing',
+      overloadTimer: 0,
+      overloadedCount: 0,
     };
 
     this.buildGravity();
@@ -185,7 +189,7 @@ export class GameEngine {
     );
   }
 
-    railwayCost(a: City, b: City): number {
+  railwayCost(a: City, b: City): number {
     return Math.round(
       (CONFIG.railwayBaseCost +
         distanceBetween(a, b) * CONFIG.railwayCostPerUnit +
@@ -542,6 +546,10 @@ export class GameEngine {
       railwayCount: this.state.railways.size,
       trainCount: this.state.trains.size,
       networkHealth: this.networkHealth(),
+      outcome: this.state.outcome,
+      overloadedCount: this.state.overloadedCount,
+      overloadTimer: this.state.overloadTimer,
+      overloadLimit: CONFIG.overloadGraceSeconds,
       bulletUsed,
       bulletLimit,
       expansionMultiplier: this.expansionMultiplier(),
@@ -623,6 +631,10 @@ export interface UiSnapshot {
   railwayCount: number;
   trainCount: number;
   networkHealth: number;
+  outcome: GameOutcome;
+  overloadedCount: number;
+  overloadTimer: number;
+  overloadLimit: number;
   bulletUsed: number;
   bulletLimit: number;
   expansionMultiplier: number;
