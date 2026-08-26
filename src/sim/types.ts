@@ -34,6 +34,8 @@ export interface City {
   connectedRailways: string[];
   /** seconds until next demand spawn */
   spawnTimer: number;
+  /** 1 for the continent's hub city, < 1 for everyone else */
+  spawnScale: number;
 }
 
 export interface Railway {

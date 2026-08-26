@@ -1,6 +1,9 @@
 import { CONFIG } from './config';
 import { CITY_SEEDS, CONTINENTS, TIER_CAPACITY, tierFor } from './mapData';
+import type { CitySeed } from './mapData';
 import { buildRoutingTable, nextHop } from './routing';
+import { MAX_STATION_TIER, STATION_TIERS, stationTier } from './stations';
+
 import type {
   BuildResult,
   City,
@@ -52,6 +55,15 @@ export class GameEngine {
   }
 
   reset() {
+    // One hub per continent (largest population) carries full demand; the rest
+    // ramp slowly so the opening minutes are actually buildable at 1×.
+    const hubBest = new Map<ContinentId, CitySeed>();
+    for (const seed of CITY_SEEDS) {
+      const cur = hubBest.get(seed.continent);
+      if (!cur || seed.population > cur.population) hubBest.set(seed.continent, seed);
+    }
+    const hubs = new Set([...hubBest.values()].map((s) => s.id));
+
     const cities = new Map<string, City>();
     for (const seed of CITY_SEEDS) {
       const tier = tierFor(seed.population);
@@ -70,6 +82,7 @@ export class GameEngine {
         waitingPassengers: 0,
         connectedRailways: [],
         spawnTimer: Math.random() * CONFIG.spawnInterval,
+        spawnScale: hubs.has(seed.id) ? 1 : CONFIG.secondarySpawnScale,
       });
     }
 
@@ -199,13 +212,46 @@ export class GameEngine {
     );
   }
 
-  stationUpgradeCost(city: City): number {
-    if (city.stationLevel >= CONFIG.maxStationLevel) return 0;
+    stationTier(city: City) {
+    return stationTier(city.stationLevel);
+  }
+
+  /** Base price for one step of this city's station ladder, before the tier multiplier. */
+  private stationUpgradeUnit(city: City): number {
     const millions = city.population / 1_000_000;
+    return CONFIG.stationUpgradeBaseCost + millions * CONFIG.stationUpgradeCostPerMillion;
+  }
+
+  /** Cost to reach `targetLevel`; 0 when that level is not a valid next step. */
+  stationUpgradeCostFor(city: City, targetLevel: number): number {
+    if (targetLevel <= 1 || targetLevel > MAX_STATION_TIER) return 0;
     return Math.round(
-      (CONFIG.stationUpgradeBaseCost + millions * CONFIG.stationUpgradeCostPerMillion) *
-        city.stationLevel *
+      this.stationUpgradeUnit(city) *
+        stationTier(targetLevel).costMultiplier *
         this.expansionMultiplier(),
+    );
+  }
+
+  stationUpgradeCost(city: City): number {
+    if (city.stationLevel >= MAX_STATION_TIER) return 0;
+    return this.stationUpgradeCostFor(city, city.stationLevel + 1);
+  }
+
+  stationTicketMultiplier(city: City): number {
+    return stationTier(city.stationLevel).ticketMult;
+  }
+
+  /** A line can hold extra trains only if BOTH ends have the platforms for them. */
+  railwayCapacityFor(railway: Railway): number {
+    const a = this.state.cities.get(railway.from);
+    const b = this.state.cities.get(railway.to);
+    const bonus = Math.min(
+      a ? stationTier(a.stationLevel).platforms : 0,
+      b ? stationTier(b.stationLevel).platforms : 0,
+    );
+    return Math.min(
+      CONFIG.railwayTrainCapacityMax,
+      CONFIG.railwayTrainCapacity + bonus,
     );
   }
 
@@ -216,10 +262,6 @@ export class GameEngine {
         railway.distance * CONFIG.lineUpgradeCostPerUnit * railway.level) *
         this.expansionMultiplier(),
     );
-  }
-
-  stationTicketMultiplier(city: City): number {
-    return 1 + (city.stationLevel - 1) * CONFIG.stationRevenueBonusPerLevel;
   }
 
   findRailwayBetween(a: string, b: string): Railway | undefined {
@@ -250,12 +292,13 @@ export class GameEngine {
       from: fromId,
       to: toId,
       distance: distanceBetween(from, to),
-      capacity: CONFIG.railwayTrainCapacity,
+      capacity: 0, 
       constructionCost: cost,
       level: 1,
       trainIds: [],
     };
     this.state.railways.set(railway.id, railway);
+    railway.capacity = this.railwayCapacityFor(railway);
     from.connectedRailways.push(railway.id);
     to.connectedRailways.push(railway.id);
     this.state.money -= cost;
@@ -287,17 +330,30 @@ export class GameEngine {
   upgradeStation(cityId: string): BuildResult {
     const city = this.state.cities.get(cityId);
     if (!city) return { ok: false, error: 'Unknown station.' };
-    if (city.stationLevel >= CONFIG.maxStationLevel) {
-      return { ok: false, error: 'This station is already fully upgraded.' };
+    if (city.stationLevel >= MAX_STATION_TIER) {
+      return { ok: false, error: 'This station is already a grand terminal.' };
     }
     const cost = this.stationUpgradeCost(city);
     if (this.state.money < cost) {
       return { ok: false, error: `Short by $${Math.ceil(cost - this.state.money).toLocaleString()}.` };
     }
+
     city.stationLevel += 1;
     this.state.money -= cost;
     this.state.stats.totalSpent += cost;
+    this.applyStationLevel(city);
     return { ok: true };
+  }
+
+  /** Re-derive everything that depends on a station's tier. Cheap, so just recompute. */
+  private applyStationLevel(city: City) {
+    city.passengerCapacity = Math.round(
+      TIER_CAPACITY[city.tier] * stationTier(city.stationLevel).capacityMult,
+    );
+    for (const railId of city.connectedRailways) {
+      const rail = this.state.railways.get(railId);
+      if (rail) rail.capacity = this.railwayCapacityFor(rail);
+    }
   }
 
   buyTrain(railwayId: string): BuildResult {
@@ -338,6 +394,8 @@ export class GameEngine {
 
   /** Advance the world by `dt` seconds of simulated time. */
   update(dt: number) {
+    if (this.state.outcome !== 'playing') return;
+
     const prevSecond = Math.floor(this.state.stats.elapsed);
     this.state.stats.elapsed += dt;
     const second = Math.floor(this.state.stats.elapsed);
@@ -347,6 +405,41 @@ export class GameEngine {
 
     this.updateCities(dt);
     this.updateTrains(dt);
+    this.checkOutcome(dt);
+  }
+
+  /**
+   * Win/lose evaluation. Overload pressure accrues once per overloaded station per
+   * second, so a single jam is survivable but a spreading one is not; clearing the
+   * jams bleeds pressure back off instead of leaving the run permanently doomed.
+   */
+  private checkOutcome(dt: number) {
+    let overloaded = 0;
+    let allConnected = true;
+
+    for (const city of this.state.cities.values()) {
+      if (!this.isContinentUnlocked(city.continent)) {
+        allConnected = false;
+        continue;
+      }
+      if (statusFor(city.waitingPassengers, city.passengerCapacity) === 'overloaded') overloaded++;
+      if (city.connectedRailways.length === 0) allConnected = false;
+    }
+
+    this.state.overloadedCount = overloaded;
+    this.state.overloadTimer = Math.max(
+      0,
+      this.state.overloadTimer +
+        (overloaded > 0 ? dt * overloaded : -dt * CONFIG.overloadRecoveryRate),
+    );
+
+    if (this.state.overloadTimer >= CONFIG.overloadGraceSeconds) {
+      this.state.outcome = 'lost';
+      return;
+    }
+    if (allConnected && this.state.unlockedContinents.size === CONTINENTS.length) {
+      this.state.outcome = 'won';
+    }
   }
 
   private updateCities(dt: number) {
@@ -367,23 +460,43 @@ export class GameEngine {
     }
   }
 
+  /** World demand climbs slowly with elapsed time so late-game networks stay pressured. */
+  demandGrowth(): number {
+    const minutes = this.state.stats.elapsed / 60;
+    return Math.min(CONFIG.demandGrowthCap, 1 + minutes * CONFIG.demandGrowthPerMinute);
+  }
+
+
   private spawnDemand(city: City) {
-    const amount =
-      (city.population / 1_000_000) * CONFIG.spawnRatePerMillion * CONFIG.spawnInterval;
-    const weights = this.gravity.get(city.id);
     if (!this.isContinentUnlocked(city.continent)) return;
-    if (!weights || amount <= 0) return;
+    const weights = this.gravity.get(city.id);
+    if (!weights) return;
+
+    const amount =
+      (city.population / 1_000_000) *
+      CONFIG.spawnRatePerMillion *
+      CONFIG.spawnInterval *
+      city.spawnScale *
+      this.demandGrowth();
+    if (amount <= 0) return;
+
+    // Station attractiveness biases where travellers want to go, so upgrading a hub
+    // pulls more riders towards it — more fares, but more platform pressure too.
+    const pull = (id: string) => {
+      const dest = this.state.cities.get(id);
+      return dest ? stationTier(dest.stationLevel).attractiveness : 1;
+    };
 
     const picks = 2;
     const share = amount / picks;
     let sum = 0;
-    for (const w of weights) sum += w.weight;
+    for (const w of weights) sum += w.weight * pull(w.id);
 
     for (let i = 0; i < picks; i++) {
       let roll = Math.random() * sum;
       let chosen = weights[weights.length - 1].id;
       for (const w of weights) {
-        roll -= w.weight;
+        roll -= w.weight * pull(w.id);
         if (roll <= 0) {
           chosen = w.id;
           break;
@@ -424,11 +537,14 @@ export class GameEngine {
    * its final destination, so transfers carry their accrued fare with them.
    */
   private serviceStation(train: Train, railway: Railway, stationId: string, continuingTo: string) {
+    const station = this.state.cities.get(stationId)!;
+    const tier = stationTier(station.stationLevel);
+
     train.phase = 'dwelling';
-    train.dwellTimer = CONFIG.dwellTime;
+    train.dwellTimer = CONFIG.dwellTime * tier.dwellMult;
     train.direction = train.direction === 1 ? -1 : 1;
 
-    const station = this.state.cities.get(stationId)!;
+    let handled = 0;
     const previousStation = this.state.cities.get(continuingTo)!;
     const legValue =
       railway.distance * CONFIG.ticketMultiplier * this.stationTicketMultiplier(previousStation);
@@ -476,6 +592,15 @@ export class GameEngine {
     }
 
     train.onboard = onboard;
+
+    // Retail, parking and concessions — earned on footfall, not on distance.
+    if (tier.commercialPerPax > 0 && handled > 0) {
+      const commercial = handled * tier.commercialPerPax;
+      this.state.money += commercial;
+      this.state.stats.totalRevenue += commercial;
+      station.stationRevenue += commercial;
+      this.state.stats.recentRevenue[Math.floor(this.state.stats.elapsed) % 60] += commercial;
+    }
   }
 
   // --------------------------------------------------------------- reading
@@ -529,6 +654,7 @@ export class GameEngine {
         stationLevel: c.stationLevel,
         stationRevenue: c.stationRevenue,
         stationUpgradeCost: this.stationUpgradeCost(c),
+        stationCosts: STATION_TIERS.map((t) => this.stationUpgradeCostFor(c, t.level)),
         ticketMultiplier: this.stationTicketMultiplier(c),
       };
     });
@@ -594,6 +720,7 @@ export interface CitySnapshot {
   stationLevel: number;
   stationRevenue: number;
   stationUpgradeCost: number;
+  stationCosts: number[];
   ticketMultiplier: number;
 }
 

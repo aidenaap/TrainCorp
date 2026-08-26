@@ -1,6 +1,7 @@
 import { CONFIG } from '../sim/config';
 import type { CitySnapshot, RailwaySnapshot } from '../sim/engine';
 import { compact, money } from './format';
+import { StationUpgrades } from './StationUpgrades';
 
 interface Props {
   city: CitySnapshot;
@@ -31,7 +32,6 @@ export function CityPanel({
   onClose,
 }: Props) {
   const ratio = Math.min(1.35, city.waiting / city.capacity);
-  const stationMaxed = city.stationUpgradeCost === 0;
 
   return (
     <aside className="panel">
@@ -57,6 +57,9 @@ export function CityPanel({
         </div>
       </div>
 
+      <p className="panel__eyebrow">Station upgrade</p>
+      <StationUpgrades city={city} money={cash} onUpgrade={onUpgradeStation} />
+
       <p className="panel__eyebrow">Connections</p>
       {lines.length === 0 ? (
         <p className="empty">
@@ -72,7 +75,7 @@ export function CityPanel({
             const locked = line.bulletLocked;
             const upgradeBroke = cash < line.upgradeCost;
             return (
-              <li key={line.id} className="line-list__row">
+              <li key={line.id} className="line-list__row line-list__row--stacked">
                 <div className="line-list__link">
                   <span className="line-list__name">{other}</span>
                   <span className="line-list__meta">
@@ -82,58 +85,37 @@ export function CityPanel({
                     </span>
                   </span>
                 </div>
-                <button
-                  className="btn btn--small btn--teal"
-                  disabled={full || broke}
-                  onClick={() => onBuyTrain(line.id)}
-                  title={full ? 'Line at train capacity' : `Buy a train for ${money(CONFIG.trainCost)}`}
-                >
-                  {full ? 'Full' : `Train ${money(CONFIG.trainCost)}`}
-                </button>
-                <button
-                  className="btn btn--small btn--teal btn--ghost"
-                  disabled={atBullet || locked || upgradeBroke}
-                  onClick={() => onUpgradeLine(line.id)}
-                  title={
-                    atBullet
-                      ? 'Already bullet train track'
-                      : locked
-                        ? 'Bullet track allowance full — unlock another continent'
-                        : `Upgrade for ${money(line.upgradeCost)}`
-                  }
-                >
-                  {atBullet ? 'Bullet' : locked ? 'Locked' : `Upgrade ${money(line.upgradeCost)}`}
-                </button>
+                <div className="line-list__actions">
+                  <button
+                    className="btn btn--small btn--teal"
+                    disabled={full || broke}
+                    onClick={() => onBuyTrain(line.id)}
+                    title={
+                      full ? 'Line at train capacity' : `Buy a train for ${money(CONFIG.trainCost)}`
+                    }
+                  >
+                    {full ? 'Full' : `Train ${money(CONFIG.trainCost)}`}
+                  </button>
+                  <button
+                    className="btn btn--small btn--teal btn--ghost"
+                    disabled={atBullet || locked || upgradeBroke}
+                    onClick={() => onUpgradeLine(line.id)}
+                    title={
+                      atBullet
+                        ? 'Already bullet train track'
+                        : locked
+                          ? 'Bullet track allowance full — unlock another continent'
+                          : `Upgrade for ${money(line.upgradeCost)}`
+                    }
+                  >
+                    {atBullet ? 'Bullet' : locked ? 'Locked' : `Upgrade ${money(line.upgradeCost)}`}
+                  </button>
+                </div>
               </li>
             );
           })}
         </ul>
       )}
-
-      <p className="panel__eyebrow">Station upgrade</p>
-      <ul className="line-list">
-        <li className="line-list__row line-list__row--solo">
-          <div className="line-list__link">
-            <span className="line-list__name">Level {city.stationLevel}</span>
-            <span className="line-list__meta">
-              {city.ticketMultiplier.toFixed(2)}× ticket value ·{' '}
-              <span className="line-list__trains">{money(city.stationRevenue)}</span> earned
-            </span>
-          </div>
-          <button
-            className="btn btn--small btn--teal"
-            disabled={stationMaxed || cash < city.stationUpgradeCost}
-            onClick={() => onUpgradeStation(city.id)}
-            title={
-              stationMaxed
-                ? 'Station fully upgraded'
-                : `Upgrade station for ${money(city.stationUpgradeCost)}`
-            }
-          >
-            {stationMaxed ? 'Max' : `L${city.stationLevel + 1} ${money(city.stationUpgradeCost)}`}
-          </button>
-        </li>
-      </ul>
 
       <p className="panel__eyebrow">Operations</p>
       <dl className="facts">

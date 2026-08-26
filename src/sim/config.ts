@@ -12,10 +12,9 @@ export const CONFIG = {
   continentUnlockBaseCost: 250_000,
   trainCost: 1_200,
   ticketMultiplier: 0.022,
-  stationUpgradeBaseCost: 1_800,
-  stationUpgradeCostPerMillion: 420,
-  stationRevenueBonusPerLevel: 0.18,
-  maxStationLevel: 3,
+  stationUpgradeBaseCost: 900,
+  stationUpgradeCostPerMillion: 140,
+  maxStationLevel: 10,
 
   // Expansion pressure: track + upgrades climb per continent opened, capped at 5 of 6.
   expansionCostStep: 0.22,
@@ -31,10 +30,16 @@ export const CONFIG = {
   lineLevelSpeed: { 1: 1, 2: 1.45, 3: 2.25 },
   dwellTime: 1.1, // seconds stopped at a station
   railwayTrainCapacity: 4,
+  railwayTrainCapacityMax: 5,
 
   // Passengers
   spawnInterval: 1.5, // seconds between demand pulses per city
   spawnRatePerMillion: 1.65, // passengers per second per 1M population
+  /** every city except its continent's largest spawns at this fraction of full rate */
+  secondarySpawnScale: 0.7,
+  /** world demand climbs over the run so a maxed-out network still has pressure */
+  demandGrowthPerMinute: 0.05,
+  demandGrowthCap: 2.6,
   /** distance falloff for destination choice — higher means more local travel */
   gravityExponent: 1.35,
 
@@ -43,6 +48,8 @@ export const CONFIG = {
   criticalAt: 0.9,
   /** sim-seconds of accumulated overload before the run is lost (drains N× with N overloaded stations) */
   overloadGraceSeconds: 300,
+  /** sim-seconds of pressure bled off per second while nothing is overloaded */
+  overloadRecoveryRate: 2,
 
   // Simulation
   fixedStep: 1 / 60,
