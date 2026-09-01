@@ -4,6 +4,8 @@ export const CONFIG = {
   // Economy
   railwayBaseCost: 1_800,
   railwayCostPerUnit: 8.5,
+  railwayWaterCostMultiplier: 2.4,
+  railwayMountainCostMultiplier: 1.5,
   stationCostBase: 250,
   stationCostPerMillion: 55,
   stationCostMaxMultiplier: 2.4,

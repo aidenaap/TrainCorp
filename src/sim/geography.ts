@@ -191,7 +191,7 @@ const SULAWESI: LonLat[] = [
 
 const NEW_GUINEA: LonLat[] = [
   [131, -1.2], [134, -2.2], [138, -2.5], [141, -2.6], [145, -4.5], [147, -6],
-  [150.5, -10.2], [147, -9], [143, -9], [139, -8.2], [135, -8], [132, -4.2],
+  [150.5, -10.2], [147.4, -9.7], [143, -9], [139, -8.2], [135, -8], [132, -4.2],
 ];
 
 const LUZON: LonLat[] = [
@@ -223,6 +223,12 @@ const AUSTRALIA: LonLat[] = [
 
 const TASMANIA: LonLat[] = [
   [145, -40.7], [148, -40.8], [148.3, -43], [146, -43.6], [144.7, -41],
+];
+
+/** Viti Levu — small, but it gives Oceania a mid-Pacific anchor to route toward. */
+const VITI_LEVU: LonLat[] = [
+  [177.25, -17.55], [177.9, -17.3], [178.5, -17.5], [178.65, -18.1],
+  [178.0, -18.3], [177.35, -18.05],
 ];
 
 const NZ_NORTH: LonLat[] = [
@@ -319,6 +325,7 @@ export const LANDMASSES: LandMass[] = [
   land('hispaniola', 0.5, HISPANIOLA),
   land('newfoundland', 0.5, NEWFOUNDLAND),
   land('tasmania', 0.5, TASMANIA),
+  land('viti-levu', 0.6, VITI_LEVU),
   land('taiwan', 0.6, TAIWAN),
   land('sri-lanka', 0.6, SRI_LANKA),
   land('novaya-zemlya', 0.6, NOVAYA_ZEMLYA),
@@ -341,7 +348,7 @@ export const INLAND_WATER: Poly[] = [
     [53.5, 39], [54, 42], [53, 46], [50, 46.5]]),
   // Baltic Sea
   projectPath([[12.5, 54.5], [20, 54.8], [21.5, 57], [24.5, 59.5], [27, 60.5],
-    [24, 61], [21, 63.5], [18, 60.5], [17, 57], [14, 55.5]]),
+    [24, 61], [21.5, 63.5], [18.9, 60.9], [17.6, 56.6], [14, 55.5]]),
   // Hudson Bay interior
   projectPath([[-94, 59], [-88, 56], [-82, 54], [-79.5, 57], [-79, 61], [-85, 63],
     [-90, 62]]),
@@ -394,8 +401,8 @@ export const MOUNTAIN_RANGES: MountainRange[] = [
     [70, 42], [76, 42.5], [82, 43], [88, 43],
   ]),
   range('rockies', 'Rocky Mountains', 0.8, 1.6, [
-    [-126, 60], [-122, 55], [-116, 50], [-112, 45], [-110, 41], [-107, 37],
-    [-108, 33],
+    [-126, 60], [-122, 55], [-116, 50], [-113, 46], [-110.5, 43], [-107, 39.5],
+    [-105.8, 36], [-107.5, 33],
   ]),
   range('sierra-cascade', 'Sierra Nevada & Cascades', 0.78, 0.9, [
     [-121.6, 48.8], [-121.6, 45.5], [-122, 42], [-120.8, 39.5], [-119, 37],

@@ -187,6 +187,60 @@ function paintRelief(ctx: CanvasRenderingContext2D, view: MapView) {
   ctx.restore();
 }
 
+/** Deterministic per-peak variation — keeps ranges from looking stamped, without shimmering. */
+function jitter(seed: number): number {
+  const v = Math.sin(seed * 12.9898) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+interface Peak {
+  x: number;
+  y: number;
+  halfWidth: number;
+  height: number;
+}
+
+/**
+ * Walks the ridge centreline at a fixed screen-space interval and drops a peak at
+ * each step. Wide ranges get a second, smaller row behind the first so they read as
+ * a massif rather than a single file of triangles.
+ */
+function buildPeaks(view: MapView, r: MountainRange, base: number): Peak[] {
+  const pts = r.path.map(([x, y]) => worldToScreen(view.camera, view.width, view.height, x, y));
+  const step = base * 0.33;
+  const peaks: Peak[] = [];
+  const rows = base > 20 ? [0.21, -0.19, 0] : [0];
+
+  let seed = Math.round(r.spread * 100);
+  for (const row of rows) {
+    const backRow = row !== 0;
+    let carry = row === 0 ? 0 : step * 0.5;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const dx = pts[i + 1].x - pts[i].x;
+      const dy = pts[i + 1].y - pts[i].y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-3) continue;
+      const ux = dx / len;
+      const uy = dy / len;
+      for (let d = carry; d < len; d += step) {
+        const n = jitter(seed++);
+        const scale = (backRow ? 0.62 : 1) * (0.78 + n * 0.42);
+        peaks.push({
+          x: pts[i].x + ux * d - uy * base * row,
+          y: pts[i].y + uy * d + ux * base * row,
+          halfWidth: base * 0.44 * scale,
+          height: base * (0.3 + r.elevation * 0.46) * scale,
+        });
+      }
+      carry = step - ((len - carry) % step);
+    }
+  }
+
+  // Painter's order: peaks further up the screen sit behind the ones below them.
+  peaks.sort((a, b) => a.y - b.y);
+  return peaks;
+}
+
 function drawRange(
   ctx: CanvasRenderingContext2D,
   view: MapView,
@@ -196,85 +250,82 @@ function drawRange(
   const base = Math.max(2.5, r.spread * 2 * zoom);
   const e = r.elevation;
 
-  // cast shadow, offset south-east: reads as raised ground rather than a painted stripe
-  ctx.save();
-  ctx.globalAlpha = 0.35 + e * 0.4;
-  ctx.translate(base * 0.14, base * 0.18);
-  ctx.strokeStyle = COLORS.ridgeShadow;
-  ctx.lineWidth = base;
-  traceRidge(ctx, view, r.path);
-  ctx.stroke();
-  ctx.restore();
-
-  // foothills — barely above the surrounding plain
-  ctx.strokeStyle = mix(COLORS.land, COLORS.landHigh, 0.5 + e * 0.5);
-  ctx.lineWidth = base;
-  traceRidge(ctx, view, r.path);
-  ctx.stroke();
-
-  // upper slopes — this is where elevation starts to show
-  ctx.strokeStyle = mix(COLORS.landHigh, COLORS.ridgeLow, 0.35 + e * 0.65);
-  ctx.lineWidth = base * 0.62;
-  traceRidge(ctx, view, r.path);
-  ctx.stroke();
-
-  // bare rock, only on the taller half of the list
-  if (e >= 0.45) {
-    ctx.strokeStyle = mix(COLORS.ridgeLow, COLORS.ridgeHigh, (e - 0.45) * 1.6);
-    ctx.lineWidth = base * 0.3;
+  // Too small for triangles to read — a soft band keeps the range legible at world zoom.
+  if (base < 7) {
+    ctx.strokeStyle = mix(COLORS.landHigh, COLORS.ridgeLow, 0.4 + e * 0.6);
+    ctx.lineWidth = base;
     traceRidge(ctx, view, r.path);
     ctx.stroke();
+    return;
   }
 
-  // snow, reserved for the genuinely alpine ranges
-  if (e >= 0.78) {
-    ctx.strokeStyle = mix(COLORS.ridgeHigh, COLORS.ridgeSnow, Math.min(0.62, (e - 0.78) * 2.8));
-    ctx.lineWidth = Math.max(0.9, base * 0.13);
-    traceRidge(ctx, view, r.path);
-    ctx.stroke();
-  }
+  const peaks = buildPeaks(view, r, base);
 
-  // hatching only once a range is wide enough on screen for it to read as texture
-  if (base > 11) hatchRidge(ctx, view, r, base);
-}
+  const lit = mix(COLORS.ridgeLow, COLORS.ridgeHigh, 0.25 + e * 0.75);
+  const dark = mix(COLORS.landLow, COLORS.ridgeLow, 0.1 + e * 0.35);
+  const snow = e >= 0.7 ? mix(COLORS.ridgeHigh, COLORS.ridgeSnow, Math.min(0.85, (e - 0.7) * 2.4)) : null;
 
-/** Short perpendicular ticks along the spine — turns a smooth tube into ridged terrain. */
-function hatchRidge(
-  ctx: CanvasRenderingContext2D,
-  view: MapView,
-  r: MountainRange,
-  base: number,
-) {
-  const pts = r.path.map(([x, y]) => worldToScreen(view.camera, view.width, view.height, x, y));
-  const spacing = base * 0.5;
-  const half = base * 0.44;
-
+  // Ground shadow: one pass under all peaks so overlapping triangles don't double-darken.
   ctx.save();
-  ctx.globalAlpha = 0.34;
-  ctx.strokeStyle = COLORS.ridgeShadow;
-  ctx.lineWidth = Math.max(0.8, base * 0.07);
+  ctx.globalAlpha = 0.3 + e * 0.25;
+  ctx.fillStyle = COLORS.ridgeShadow;
   ctx.beginPath();
-  let carry = 0;
-  let tick = 0;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const dx = pts[i + 1].x - pts[i].x;
-    const dy = pts[i + 1].y - pts[i].y;
-    const len = Math.hypot(dx, dy);
-    if (len < 1e-3) continue;
-    const ux = dx / len;
-    const uy = dy / len;
-    for (let d = carry; d < len; d += spacing) {
-      // deterministic jitter: uniform rungs read as a ladder, varied ones as terrain
-      const wobble = 0.55 + 0.45 * Math.abs(Math.sin(tick++ * 2.399));
-      const cx = pts[i].x + ux * d;
-      const cy = pts[i].y + uy * d;
-      ctx.moveTo(cx - uy * half * wobble, cy + ux * half * wobble);
-      ctx.lineTo(cx + uy * half * 0.25, cy - ux * half * 0.25);
-    }
-    carry = spacing - ((len - carry) % spacing);
+  for (const p of peaks) {
+    const o = p.halfWidth * 0.3;
+    ctx.moveTo(p.x - p.halfWidth + o, p.y + o);
+    ctx.lineTo(p.x + o, p.y - p.height + o);
+    ctx.lineTo(p.x + p.halfWidth + o, p.y + o);
+    ctx.closePath();
   }
-  ctx.stroke();
+  ctx.fill();
   ctx.restore();
+
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(0.6, base * 0.035);
+  ctx.strokeStyle = COLORS.landEdge;
+
+  for (const p of peaks) {
+    const apexX = p.x;
+    const apexY = p.y - p.height;
+
+    // sunlit west face
+    ctx.fillStyle = lit;
+    ctx.beginPath();
+    ctx.moveTo(p.x - p.halfWidth, p.y);
+    ctx.lineTo(apexX, apexY);
+    ctx.lineTo(p.x, p.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // shaded east face
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(apexX, apexY);
+    ctx.lineTo(p.x + p.halfWidth, p.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // silhouette
+    ctx.beginPath();
+    ctx.moveTo(p.x - p.halfWidth, p.y);
+    ctx.lineTo(apexX, apexY);
+    ctx.lineTo(p.x + p.halfWidth, p.y);
+    ctx.stroke();
+
+    // snow cap on the top third, only for genuinely alpine ranges
+    if (snow && p.height > 4) {
+      const t = 0.46;
+      ctx.fillStyle = snow;
+      ctx.beginPath();
+      ctx.moveTo(apexX, apexY);
+      ctx.lineTo(apexX - p.halfWidth * t, apexY + p.height * t);
+      ctx.lineTo(apexX - p.halfWidth * t * 0.35, apexY + p.height * t * 0.62);
+      ctx.lineTo(apexX + p.halfWidth * t * 0.5, apexY + p.height * t);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
 }
 
 function paintInlandWater(ctx: CanvasRenderingContext2D, view: MapView) {

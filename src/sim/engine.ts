@@ -3,6 +3,7 @@ import { CITY_SEEDS, CONTINENTS, TIER_CAPACITY, tierFor } from './mapData';
 import type { CitySeed } from './mapData';
 import { buildRoutingTable, nextHop } from './routing';
 import { MAX_STATION_TIER, STATION_TIERS, stationTier } from './stations';
+import { sampleTerrain, type TerrainProfile } from './terrain';
 
 import type {
   BuildResult,
@@ -202,17 +203,29 @@ export class GameEngine {
     );
   }
 
-  railwayCost(a: City, b: City): number {
+  terrainFor(a: { x: number; y: number }, b: { x: number; y: number }): TerrainProfile {
+    return sampleTerrain(a.x, a.y, b.x, b.y);
+  }
+
+  terrainMultiplier(terrain: TerrainProfile): number {
+    return (
+      1 +
+      terrain.water * CONFIG.railwayWaterCostMultiplier +
+      terrain.mountain * CONFIG.railwayMountainCostMultiplier
+    );
+  }
+
+  railwayCost(a: City, b: City, terrain = this.terrainFor(a, b)): number {
     return Math.round(
       (CONFIG.railwayBaseCost +
-        distanceBetween(a, b) * CONFIG.railwayCostPerUnit +
+        distanceBetween(a, b) * CONFIG.railwayCostPerUnit * this.terrainMultiplier(terrain) +
         this.stationCost(a) +
         this.stationCost(b)) *
         this.expansionMultiplier(),
     );
   }
 
-    stationTier(city: City) {
+  stationTier(city: City) {
     return stationTier(city.stationLevel);
   }
 

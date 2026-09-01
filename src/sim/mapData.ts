@@ -60,7 +60,8 @@ export const CITY_SEEDS: CitySeed[] = [
   city('minneapolis', 'Minneapolis', -93.265, 44.9778, 3_700_000, 'north-america'),
   city('st-louis', 'St. Louis', -90.1994, 38.627, 2_800_000, 'north-america'),
   city('monterrey', 'Monterrey', -100.3161, 25.6866, 5_300_000, 'north-america'),
-  city('guadalajara', 'Guadalajara', -103.3496, 20.6597, 5_300_000, 'north-america'),
+  city('vancouver', 'Vancouver', -123.1207, 49.2827, 2_700_000, 'north-america'),
+  city('winnipeg', 'Winnipeg', -97.1384, 49.8951, 850_000, 'north-america'),
 
   city('sao-paulo', 'São Paulo', -46.6333, -23.5505, 22_400_000, 'south-america'),
   city('buenos-aires', 'Buenos Aires', -58.3816, -34.6037, 15_600_000, 'south-america'),
@@ -85,9 +86,11 @@ export const CITY_SEEDS: CitySeed[] = [
   city('munich', 'Munich', 11.582, 48.1351, 2_600_000, 'europe'),
   city('vienna', 'Vienna', 16.3738, 48.2082, 2_000_000, 'europe'),
   city('warsaw', 'Warsaw', 21.0122, 52.2297, 3_100_000, 'europe'),
-  city('budapest', 'Budapest', 19.0402, 47.4979, 2_200_000, 'europe'),
   city('bucharest', 'Bucharest', 26.1025, 44.4268, 2_200_000, 'europe'),
   city('kyiv', 'Kyiv', 30.5234, 50.4501, 3_500_000, 'europe'),
+  city('stockholm', 'Stockholm', 18.0686, 59.3293, 2_400_000, 'europe'),
+  city('oslo', 'Oslo', 10.7522, 59.9139, 1_600_000, 'europe'),
+  city('tel-aviv', 'Tel Aviv', 34.7818, 32.0853, 4_200_000, 'europe'),
 
   city('cairo', 'Cairo', 31.2357, 30.0444, 22_200_000, 'africa'),
   city('lagos', 'Lagos', 3.3792, 6.5244, 16_600_000, 'africa'),
@@ -115,12 +118,16 @@ export const CITY_SEEDS: CitySeed[] = [
   city('seoul', 'Seoul', 126.978, 37.5665, 9_700_000, 'asia'),
   city('jakarta', 'Jakarta', 106.8456, -6.2088, 11_200_000, 'asia'),
   city('manila', 'Manila', 120.9842, 14.5995, 14_700_000, 'asia'),
+  city('yakutsk', 'Yakutsk', 129.7422, 62.0355, 360_000, 'asia'),
+  city('magadan', 'Magadan', 150.8085, 59.5638, 140_000, 'asia'),
 
   city('sydney', 'Sydney', 151.2093, -33.8688, 5_300_000, 'oceania'),
   city('melbourne', 'Melbourne', 144.9631, -37.8136, 5_100_000, 'oceania'),
   city('brisbane', 'Brisbane', 153.026, -27.4705, 2_700_000, 'oceania'),
   city('perth', 'Perth', 115.8605, -31.9505, 2_200_000, 'oceania'),
   city('auckland', 'Auckland', 174.7633, -36.8485, 1_700_000, 'oceania'),
+  city('port-moresby', 'Port Moresby', 147.1803, -9.4438, 1_100_000, 'oceania'),
+  city('suva', 'Suva', 178.4419, -18.1416, 330_000, 'oceania'),
 ];
 
 export function tierFor(population: number): CityTier {
