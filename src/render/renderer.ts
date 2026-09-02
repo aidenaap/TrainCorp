@@ -1,9 +1,13 @@
 import { CONTINENTS, type Poly } from '../sim/mapData';
 import { drawMapBackground } from './mapLayer';
 import { statusFor } from '../sim/engine';
+import { pathPointAt, pathTangentAt } from '../sim/track';
 import type { City, GameState } from '../sim/types';
+import type { Draft } from '../build/trackBuilder';
 import { worldToScreen, type Camera } from './camera';
 import { COLORS, STATUS_COLOR } from './theme';
+import { drawCrossingMarkers } from './terrainMarkers';
+import { drawDraft, projectPath, strokePolyline, ticksAlong } from './trackRender';
 
 export interface ViewState {
   camera: Camera;
@@ -13,10 +17,10 @@ export interface ViewState {
   hoverCityId: string | null;
   selectedCityId: string | null;
   selectedRailwayId: string | null;
-  buildFromId: string | null;
-  buildCursor: { x: number; y: number } | null;
-  buildValid: boolean;
-  buildCost: number | null;
+  /** Live section-by-section draft. Same object every frame; App mutates it in place. */
+  draft: Draft | null;
+  /** Pre-formatted running cost of the draft, drawn at the preview tip. */
+  draftCostLabel: string | null;
 }
 
 const TIER_RADIUS = { small: 5.5, medium: 7.5, large: 10.5 } as const;
@@ -85,22 +89,20 @@ function drawContinentLocks(ctx: CanvasRenderingContext2D, state: GameState, vie
 function drawRailways(ctx: CanvasRenderingContext2D, state: GameState, view: ViewState) {
   const zoom = view.camera.zoom;
   for (const rail of state.railways.values()) {
-    const from = state.cities.get(rail.from)!;
-    const to = state.cities.get(rail.to)!;
-    const a = worldToScreen(view.camera, view.width, view.height, from.x, from.y);
-    const b = worldToScreen(view.camera, view.width, view.height, to.x, to.y);
+    // The shape is the line's own geometry now, not the chord between its two cities.
+    const pts = projectPath(view, rail.path);
+    if (pts.length < 2) continue;
+
     const active =
       rail.id === view.selectedRailwayId ||
       rail.from === view.selectedCityId ||
       rail.to === view.selectedCityId;
 
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.strokeStyle = COLORS.railShadow;
     ctx.lineWidth = Math.max(5, 8 * zoom);
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
+    strokePolyline(ctx, pts);
 
     ctx.strokeStyle = rail.level === 3 ? '#D8F7FF' : active ? COLORS.railActive : COLORS.rail;
     ctx.lineWidth = Math.max(1.6, (2.6 + rail.level * 0.7) * zoom);
@@ -110,31 +112,22 @@ function drawRailways(ctx: CanvasRenderingContext2D, state: GameState, view: Vie
     if (rail.level >= 2) {
       ctx.strokeStyle = rail.level === 3 ? '#81E6FF' : COLORS.brass;
       ctx.lineWidth = Math.max(0.8, 1.1 * zoom);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
       ctx.stroke();
     }
 
     if (zoom > 0.55) {
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const len = Math.hypot(dx, dy);
-      const ux = dx / len;
-      const uy = dy / len;
-      const spacing = 13;
       const half = Math.max(2, 3.2 * zoom);
       ctx.strokeStyle = active ? COLORS.brassDim : COLORS.railShadow;
       ctx.lineWidth = 1.4;
       ctx.beginPath();
-      for (let d = spacing; d < len - spacing; d += spacing) {
-        const px = a.x + ux * d;
-        const py = a.y + uy * d;
+      ticksAlong(pts, 13, (px, py, ux, uy) => {
         ctx.moveTo(px - uy * half, py + ux * half);
         ctx.lineTo(px + uy * half, py - ux * half);
-      }
+      });
       ctx.stroke();
     }
+
+    drawCrossingMarkers(ctx, view, rail.terrain.crossings, active);
   }
 }
 
@@ -146,12 +139,11 @@ function drawTrains(ctx: CanvasRenderingContext2D, state: GameState, view: ViewS
   for (const train of state.trains.values()) {
     const rail = state.railways.get(train.railwayId);
     if (!rail) continue;
-    const from = state.cities.get(rail.from)!;
-    const to = state.cities.get(rail.to)!;
-    const wx = from.x + (to.x - from.x) * train.progress;
-    const wy = from.y + (to.y - from.y) * train.progress;
-    const p = worldToScreen(view.camera, view.width, view.height, wx, wy);
-    const angle = Math.atan2(to.y - from.y, to.x - from.x) + (train.direction === 1 ? 0 : Math.PI);
+    // Progress is arc length along the path, so trains follow curves at constant speed.
+    const world = pathPointAt(rail.path, train.progress);
+    const heading = pathTangentAt(rail.path, train.progress);
+    const p = worldToScreen(view.camera, view.width, view.height, world.x, world.y);
+    const angle = Math.atan2(heading.y, heading.x) + (train.direction === 1 ? 0 : Math.PI);
 
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -222,7 +214,7 @@ function drawCity(
   const color = STATUS_COLOR[status];
   const isHover = view.hoverCityId === city.id;
   const isSelected = view.selectedCityId === city.id;
-  const isBuildAnchor = view.buildFromId === city.id;
+  const isBuildAnchor = view.draft?.active === true && view.draft.fromCityId === city.id;
 
   if (status === 'overloaded') {
     const pulse = 0.5 + 0.5 * Math.sin(view.time * 5);
@@ -301,53 +293,11 @@ function drawCity(
   }
 }
 
-function drawBuildPreview(ctx: CanvasRenderingContext2D, state: GameState, view: ViewState) {
-  if (!view.buildFromId || !view.buildCursor) return;
-  const from = state.cities.get(view.buildFromId);
-  if (!from) return;
-  const a = worldToScreen(view.camera, view.width, view.height, from.x, from.y);
-  const b = worldToScreen(
-    view.camera,
-    view.width,
-    view.height,
-    view.buildCursor.x,
-    view.buildCursor.y,
-  );
-
-  ctx.save();
-  ctx.setLineDash([9, 7]);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = view.buildValid ? COLORS.preview : COLORS.overloaded;
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
-  ctx.stroke();
-  ctx.restore();
-
-  if (view.buildCost !== null) {
-    const label = `$${view.buildCost.toLocaleString()}`;
-    ctx.font = '600 13px "IBM Plex Mono", monospace';
-    const w = ctx.measureText(label).width + 16;
-    const mx = (a.x + b.x) / 2;
-    const my = (a.y + b.y) / 2 - 18;
-    ctx.fillStyle = 'rgba(8,13,15,0.9)';
-    roundedRect(ctx, mx - w / 2, my - 11, w, 22, 4);
-    ctx.fill();
-    ctx.strokeStyle = view.buildValid ? COLORS.preview : COLORS.overloaded;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = view.buildValid ? COLORS.preview : COLORS.overloaded;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, mx, my);
-  }
-}
-
 export function drawScene(ctx: CanvasRenderingContext2D, state: GameState, view: ViewState) {
   drawBackground(ctx, view);
   drawRailways(ctx, state, view);
   drawContinentLocks(ctx, state, view);
-  drawBuildPreview(ctx, state, view);
+  if (view.draft) drawDraft(ctx, view, view.draft, view.draftCostLabel);
 
   const scale = Math.min(1.5, Math.max(0.7, view.camera.zoom));
   for (const id of state.cityOrder) {

@@ -1,4 +1,5 @@
 import { SPEED_OPTIONS, type SpeedOption } from '../sim/config';
+import type { TrackSection } from '../sim/track';
 import { money } from './format';
 
 export interface PendingBuild {
@@ -6,9 +7,12 @@ export interface PendingBuild {
   toId: string;
   fromName: string;
   toName: string;
+  /** Arc length of the drawn route, not the straight-line gap. */
   distance: number;
   cost: number;
   affordable: boolean;
+  /** The sections the player laid, handed straight to the engine on confirm. */
+  sections: TrackSection[];
 }
 
 interface Props {
@@ -40,9 +44,9 @@ export function Toolbar({
 }: Props) {
   const hint =
     buildStage === 'pickFirst'
-      ? 'Pick the first station'
+      ? 'Pick the station the line starts from'
       : buildStage === 'pickSecond'
-        ? 'Pick the second station · Esc to cancel'
+        ? 'Lay sections · finish on another station · Esc to cancel'
         : null;
 
   return (
@@ -104,6 +108,9 @@ export function BuildConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const sections = pending.sections.length;
+  const curves = pending.sections.filter((s) => s.kind === 'curve').length;
+
   return (
     <div className="confirm">
       <div className="confirm__route">
@@ -112,12 +119,13 @@ export function BuildConfirm({
           {pending.fromName} → {pending.toName}
         </span>
         <span className="confirm__meta">
-          {Math.round(pending.distance)} km · {money(pending.cost)}
+          {Math.round(pending.distance)} km · {sections} section{sections === 1 ? '' : 's'}
+          {curves > 0 ? ` (${curves} curved)` : ''} · {money(pending.cost)}
         </span>
       </div>
       <div className="confirm__actions">
         <button className="btn btn--ghost" onClick={onCancel}>
-          Cancel
+          Back
         </button>
         <button className="btn btn--primary" disabled={!pending.affordable} onClick={onConfirm}>
           {pending.affordable ? 'Lay track' : 'Not enough money'}

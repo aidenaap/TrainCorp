@@ -11,14 +11,39 @@ import {
 } from './render/camera';
 import { zoomAt } from './render/camera';
 import { cityAtScreen, drawScene, type ViewState } from './render/renderer';
+import { buildTrackPath } from './sim/track';
+import { sampleTerrainPath } from './sim/terrainPath';
+import {
+  commitSection,
+  createDraft,
+  draftLength,
+  resetDraft,
+  setMode,
+  startDraft,
+  summarize,
+  undoSection,
+  updatePreview,
+  type BuildMode,
+  type DraftSummary,
+} from './build/trackBuilder';
 import { Hud } from './ui/Hud';
 import { CityPanel } from './ui/CityPanel';
 import { StationsPanel, StatsPanel, TrainsPanel } from './ui/SidePanels';
 import { BuildConfirm, Toolbar, type PendingBuild } from './ui/Toolbar';
+import { TrackTools } from './ui/TrackTools';
 import { money } from './ui/format';
 import { GameOverlay } from './ui/GameOverlay';
 
 type PanelKind = 'city' | 'stations' | 'trains' | 'stats' | null;
+
+/** Running terrain totals for sections already committed to the draft. */
+interface LaidTotals {
+  length: number;
+  waterLength: number;
+  mountainLength: number;
+}
+
+const EMPTY_LAID: LaidTotals = { length: 0, waterLength: 0, mountainLength: 0 };
 
 export default function App() {
   const engineRef = useRef<GameEngine | null>(null);
@@ -28,6 +53,12 @@ export default function App() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  // The draft lives in a ref so pointer moves repaint at 60fps without re-rendering
+  // the React tree; only a small summary is mirrored into state for the toolbar.
+  const draftRef = useRef(createDraft());
+  const laidRef = useRef<LaidTotals>({ ...EMPTY_LAID });
+
   const viewRef = useRef<ViewState>({
     camera: createCamera(),
     width: 800,
@@ -36,17 +67,16 @@ export default function App() {
     hoverCityId: null,
     selectedCityId: null,
     selectedRailwayId: null,
-    buildFromId: null,
-    buildCursor: null,
-    buildValid: true,
-    buildCost: null,
+    draft: draftRef.current,
+    draftCostLabel: null,
   });
 
   const [snap, setSnap] = useState<UiSnapshot>(() => engine.snapshot());
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<SpeedOption>(1);
   const [buildMode, setBuildMode] = useState(false);
-  const [buildFromId, setBuildFromId] = useState<string | null>(null);
+  const [draftUi, setDraftUi] = useState<DraftSummary>(() => summarize(draftRef.current));
+  const [draftCost, setDraftCost] = useState<number | null>(null);
   const [pending, setPending] = useState<PendingBuild | null>(null);
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [panel, setPanel] = useState<PanelKind>(null);
@@ -60,7 +90,6 @@ export default function App() {
 
   // Keep the render view in sync with React-owned selection state.
   viewRef.current.selectedCityId = selectedCityId;
-  viewRef.current.buildFromId = buildFromId;
 
   const notify = useCallback((text: string, bad = false) => {
     setToast({ text, bad });
@@ -150,11 +179,63 @@ export default function App() {
   }, [engine]);
 
   // ------------------------------------------------------------ build flow
+
+  const syncDraftUi = useCallback(() => {
+    setDraftUi(summarize(draftRef.current));
+  }, []);
+
+  /**
+   * Recompute the running cost. Committed sections are folded into `laidRef` once at
+   * commit time, so a pointer move only ever samples terrain for the single preview
+   * section — a ten-section draft would otherwise re-raster its whole polyline at 60fps.
+   */
+  const recost = useCallback(() => {
+    const draft = draftRef.current;
+    const from = draft.fromCityId ? engine.state.cities.get(draft.fromCityId) : null;
+    if (!from) {
+      setDraftCost(null);
+      viewRef.current.draftCostLabel = null;
+      return null;
+    }
+
+    const laid = laidRef.current;
+    let length = laid.length;
+    let waterLength = laid.waterLength;
+    let mountainLength = laid.mountainLength;
+
+    const preview = draft.preview;
+    if (preview?.section && preview.valid) {
+      const p = buildTrackPath([preview.section]);
+      const t = sampleTerrainPath(p.points);
+      length += p.length;
+      waterLength += t.water * p.length;
+      mountainLength += t.mountain * p.length;
+    }
+
+    if (length <= 0) {
+      setDraftCost(null);
+      viewRef.current.draftCostLabel = null;
+      return null;
+    }
+
+    const to = preview?.endCityId ? (engine.state.cities.get(preview.endCityId) ?? null) : null;
+    const cost = engine.pathCost(from, to, length, {
+      water: waterLength / length,
+      mountain: mountainLength / length,
+      crossings: [],
+    });
+    setDraftCost(cost);
+    viewRef.current.draftCostLabel = money(cost);
+    return cost;
+  }, [engine]);
+
   const cancelBuild = useCallback(() => {
-    setBuildFromId(null);
+    resetDraft(draftRef.current);
+    laidRef.current = { ...EMPTY_LAID };
     setPending(null);
-    viewRef.current.buildCursor = null;
-    viewRef.current.buildCost = null;
+    setDraftCost(null);
+    viewRef.current.draftCostLabel = null;
+    setDraftUi(summarize(draftRef.current));
   }, []);
 
   const exitBuildMode = useCallback(() => {
@@ -162,37 +243,43 @@ export default function App() {
     cancelBuild();
   }, [cancelBuild]);
 
-  const startLineFrom = useCallback((cityId: string) => {
-    setBuildMode(true);
-    setPending(null);
-    setBuildFromId(cityId);
-  }, []);
-
-  const proposeLine = useCallback(
-    (fromId: string, toId: string) => {
-      const from = engine.state.cities.get(fromId)!;
-      const to = engine.state.cities.get(toId)!;
-      if (engine.findRailwayBetween(fromId, toId)) {
-        notify(`${from.name} and ${to.name} are already linked.`, true);
-        return;
-      }
-      const cost = engine.railwayCost(from, to);
-      setPending({
-        fromId,
-        toId,
-        fromName: from.name,
-        toName: to.name,
-        distance: Math.hypot(from.x - to.x, from.y - to.y),
-        cost,
-        affordable: cost <= engine.state.money,
-      });
+  const beginDraft = useCallback(
+    (cityId: string) => {
+      const city = engine.state.cities.get(cityId);
+      if (!city) return;
+      startDraft(draftRef.current, cityId, { x: city.x, y: city.y });
+      laidRef.current = { ...EMPTY_LAID };
+      setPending(null);
+      setDraftCost(null);
+      viewRef.current.draftCostLabel = null;
+      setDraftUi(summarize(draftRef.current));
     },
-    [engine, notify],
+    [engine],
   );
+
+  const startLineFrom = useCallback(
+    (cityId: string) => {
+      setBuildMode(true);
+      beginDraft(cityId);
+    },
+    [beginDraft],
+  );
+
+  /** Fold a just-committed section into the running terrain totals. */
+  const absorbLastSection = useCallback(() => {
+    const draft = draftRef.current;
+    const placed = draft.sections[draft.sections.length - 1];
+    if (!placed) return;
+    const p = buildTrackPath([placed]);
+    const t = sampleTerrainPath(p.points);
+    laidRef.current.length += p.length;
+    laidRef.current.waterLength += t.water * p.length;
+    laidRef.current.mountainLength += t.mountain * p.length;
+  }, []);
 
   const confirmBuild = useCallback(() => {
     if (!pending) return;
-    const result = engine.buildRailway(pending.fromId, pending.toId);
+    const result = engine.buildRailway(pending.fromId, pending.toId, pending.sections);
     if (!result.ok) {
       notify(result.error ?? 'Could not build that line.', true);
       return;
@@ -203,10 +290,9 @@ export default function App() {
     });
     setSelectedCityId(pending.toId);
     setPanel('city');
-    setPending(null);
-    setBuildFromId(null);
+    cancelBuild();
     setSnap(engine.snapshot());
-  }, [engine, notify, pending]);
+  }, [cancelBuild, engine, notify, pending]);
 
   const upgradeRailway = useCallback(
     (railwayId: string) => {
@@ -282,22 +368,101 @@ export default function App() {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
-  const handleClick = (sx: number, sy: number) => {
+  /**
+   * Rules the geometry module can't know about: an existing link, and whether the
+   * finished line is affordable. Only the *closing* section is gated on money — a
+   * player must be able to lay intermediate sections while the total is still rising.
+   */
+  const applyEngineRules = useCallback(
+    (cost: number | null) => {
+      const draft = draftRef.current;
+      const preview = draft.preview;
+      if (!preview || !draft.fromCityId) return;
+
+      if (preview.endCityId && preview.endCityId !== draft.fromCityId) {
+        if (engine.findRailwayBetween(draft.fromCityId, preview.endCityId)) {
+          preview.valid = false;
+          preview.error = 'Those stations are already linked.';
+          return;
+        }
+        if (cost !== null && cost > engine.state.money) {
+          preview.valid = false;
+          preview.error = `Short by ${money(cost - engine.state.money)}.`;
+        }
+      }
+    },
+    [engine],
+  );
+
+  const refreshPreview = useCallback(
+    (sx: number, sy: number, shift: boolean) => {
+      const view = viewRef.current;
+      const draft = draftRef.current;
+      if (!draft.active) return;
+
+      const hovered = cityAtScreen(engine.state, view, sx, sy);
+      const world = screenToWorld(view.camera, view.width, view.height, sx, sy);
+      draft.snapEnabled = shift;
+      updatePreview(
+        draft,
+        world,
+        hovered ? { cityId: hovered.id, point: { x: hovered.x, y: hovered.y } } : null,
+      );
+      const cost = recost();
+      applyEngineRules(cost);
+      syncDraftUi();
+    },
+    [applyEngineRules, engine, recost, syncDraftUi],
+  );
+
+  const handleClick = (sx: number, sy: number, shift: boolean) => {
     const view = viewRef.current;
+    const draft = draftRef.current;
     const city = cityAtScreen(engine.state, view, sx, sy);
 
     if (buildMode) {
-      if (!city) return;
-      if (!buildFromId) {
-        setBuildFromId(city.id);
-        setPending(null);
+      // First click picks the origin station; every later click places a section.
+      if (!draft.active) {
+        if (!city) {
+          notify('Start a line from a station.', true);
+          return;
+        }
+        beginDraft(city.id);
         return;
       }
-      if (city.id === buildFromId) {
-        setBuildFromId(null);
+
+      refreshPreview(sx, sy, shift);
+      const result = commitSection(draft);
+      if (result.status === 'rejected') {
+        notify(result.error, true);
         return;
       }
-      proposeLine(buildFromId, city.id);
+
+      absorbLastSection();
+
+      if (result.status === 'complete') {
+        const from = engine.state.cities.get(draft.fromCityId!)!;
+        const to = engine.state.cities.get(result.toCityId)!;
+        const laid = laidRef.current;
+        const cost = engine.pathCost(from, to, laid.length, {
+          water: laid.waterLength / Math.max(1e-6, laid.length),
+          mountain: laid.mountainLength / Math.max(1e-6, laid.length),
+          crossings: [],
+        });
+        setPending({
+          fromId: from.id,
+          toId: to.id,
+          fromName: from.name,
+          toName: to.name,
+          distance: draftLength(draft),
+          cost,
+          affordable: cost <= engine.state.money,
+          sections: result.sections,
+        });
+      }
+
+      recost();
+      syncDraftUi();
       return;
     }
 
@@ -337,21 +502,8 @@ export default function App() {
     const hovered = cityAtScreen(engine.state, view, p.x, p.y);
     view.hoverCityId = hovered?.id ?? null;
 
-    if (buildMode && buildFromId && !pending) {
-      const from = engine.state.cities.get(buildFromId)!;
-      const world = hovered
-        ? { x: hovered.x, y: hovered.y }
-        : screenToWorld(view.camera, view.width, view.height, p.x, p.y);
-      view.buildCursor = world;
-      view.buildValid =
-        !hovered ||
-        (hovered.id !== buildFromId && !engine.findRailwayBetween(buildFromId, hovered.id));
-      const cost = engine.railwayCost(from, { ...from, x: world.x, y: world.y });
-      view.buildCost = cost;
-      if (cost > engine.state.money) view.buildValid = false;
-    } else if (!pending) {
-      view.buildCursor = null;
-      view.buildCost = null;
+    if (buildMode && draftRef.current.active && !pending) {
+      refreshPreview(p.x, p.y, e.shiftKey);
     }
   };
 
@@ -359,7 +511,7 @@ export default function App() {
     const p = localPoint(e);
     const wasDrag = drag.current.moved;
     drag.current.active = false;
-    if (!wasDrag) handleClick(p.x, p.y);
+    if (!wasDrag && !pending) handleClick(p.x, p.y, e.shiftKey);
   };
 
   const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
@@ -372,14 +524,49 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      const draft = draftRef.current;
+      const key = e.key.toLowerCase();
+
       if (e.code === 'Space') {
         e.preventDefault();
         setPaused((p) => !p);
       } else if (e.key === 'Escape') {
-        if (pending) setPending(null);
-        else if (buildMode) exitBuildMode();
+        if (pending) {
+          // Keep the sections; drop just the closing one so the player can re-aim.
+          undoSection(draft);
+          const p = buildTrackPath(draft.sections);
+          const t = sampleTerrainPath(p.points);
+          laidRef.current = {
+            length: p.length,
+            waterLength: t.water * p.length,
+            mountainLength: t.mountain * p.length,
+          };
+          setPending(null);
+          recost();
+          syncDraftUi();
+        } else if (buildMode) exitBuildMode();
         else setPanel(null);
-      } else if (e.key.toLowerCase() === 'b') {
+      } else if (draft.active && key === 's') {
+        setMode(draft, 'straight');
+        syncDraftUi();
+      } else if (draft.active && key === 'c') {
+        setMode(draft, 'curve');
+        syncDraftUi();
+      } else if (draft.active && (e.key === 'Backspace' || key === 'z')) {
+        e.preventDefault();
+        if (undoSection(draft)) {
+          // Cheapest correct move: re-derive totals from the surviving sections.
+          const p = buildTrackPath(draft.sections);
+          const t = sampleTerrainPath(p.points);
+          laidRef.current = {
+            length: p.length,
+            waterLength: t.water * p.length,
+            mountainLength: t.mountain * p.length,
+          };
+          recost();
+          syncDraftUi();
+        }
+      } else if (key === 'b') {
         setBuildMode((m) => {
           if (m) cancelBuild();
           return !m;
@@ -390,7 +577,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [buildMode, cancelBuild, exitBuildMode, pending]);
+  }, [buildMode, cancelBuild, exitBuildMode, pending, recost, syncDraftUi]);
 
   // ---------------------------------------------------------------- render
   const selectedCity = useMemo(
@@ -402,7 +589,7 @@ export default function App() {
     [snap, selectedCityId],
   );
 
-  const buildStage = !buildMode ? 'idle' : buildFromId ? 'pickSecond' : 'pickFirst';
+  const buildStage = !buildMode ? 'idle' : draftUi.active ? 'pickSecond' : 'pickFirst';
 
   return (
     <div className="app">
@@ -466,17 +653,56 @@ export default function App() {
               <p className="starter__eyebrow">Global network, opening day</p>
               <p className="starter__body">
                 Major world cities, no track between them. Drag or zoom the globe, choose
-                <b>Build railway</b>, pick two stations, then put a train on the line before the
-                platforms fill.
+                <b>Build railway</b>, pick a station, then lay straight and curved sections until
+                you reach a second station.
               </p>
             </div>
+          )}
+
+          {!pending && (
+            <TrackTools
+              draft={draftUi}
+              cost={draftCost}
+              affordable={draftCost === null || draftCost <= snap.money}
+              onMode={(m: BuildMode) => {
+                setMode(draftRef.current, m);
+                recost();
+                syncDraftUi();
+              }}
+              onUndo={() => {
+                if (undoSection(draftRef.current)) {
+                  const p = buildTrackPath(draftRef.current.sections);
+                  const t = sampleTerrainPath(p.points);
+                  laidRef.current = {
+                    length: p.length,
+                    waterLength: t.water * p.length,
+                    mountainLength: t.mountain * p.length,
+                  };
+                  recost();
+                  syncDraftUi();
+                }
+              }}
+              onCancel={exitBuildMode}
+            />
           )}
 
           {pending && (
             <BuildConfirm
               pending={pending}
               onConfirm={confirmBuild}
-              onCancel={() => setPending(null)}
+              onCancel={() => {
+                undoSection(draftRef.current);
+                const p = buildTrackPath(draftRef.current.sections);
+                const t = sampleTerrainPath(p.points);
+                laidRef.current = {
+                  length: p.length,
+                  waterLength: t.water * p.length,
+                  mountainLength: t.mountain * p.length,
+                };
+                setPending(null);
+                recost();
+                syncDraftUi();
+              }}
             />
           )}
 
@@ -553,8 +779,7 @@ export default function App() {
           if (buildMode) exitBuildMode();
           else {
             setBuildMode(true);
-            setPending(null);
-            setBuildFromId(null);
+            cancelBuild();
           }
         }}
         onOpenPanel={(kind) => setPanel((p) => (p === kind ? null : kind))}

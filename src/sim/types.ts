@@ -1,3 +1,6 @@
+import type { TerrainProfile } from './terrain';
+import type { TrackPath, TrackSection } from './track';
+
 export type CityTier = 'small' | 'medium' | 'large';
 export type ContinentId =
   | 'north-america'
@@ -42,12 +45,20 @@ export interface Railway {
   id: string;
   from: string;
   to: string;
+  /** Arc length of `path`, not the straight-line gap between the two cities. */
   distance: number;
   /** max trains allowed on this line */
   capacity: number;
   constructionCost: number;
   level: 1 | 2 | 3;
   trainIds: string[];
+
+  /** Ordered sections the player laid down. Source of truth for the line's shape. */
+  sections: TrackSection[];
+  /** Flattened polyline + cumulative arc length. Derived from `sections` at build time. */
+  path: TrackPath;
+  /** What the line crosses. Drives construction cost and the bridge/tunnel icons. */
+  terrain: TerrainProfile;
 }
 
 export type TrainPhase = 'moving' | 'dwelling';

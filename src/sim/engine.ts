@@ -4,6 +4,8 @@ import type { CitySeed } from './mapData';
 import { buildRoutingTable, nextHop } from './routing';
 import { MAX_STATION_TIER, STATION_TIERS, stationTier } from './stations';
 import { sampleTerrain, type TerrainProfile } from './terrain';
+import { sampleTerrainPath } from './terrainPath';
+import { buildTrackPath, straightPath, type TrackPath, type TrackSection } from './track';
 
 import type {
   BuildResult,
@@ -215,14 +217,18 @@ export class GameEngine {
     );
   }
 
-  railwayCost(a: City, b: City, terrain = this.terrainFor(a, b)): number {
+  pathCost(from: City, to: City | null, length: number, terrain: TerrainProfile): number {
     return Math.round(
       (CONFIG.railwayBaseCost +
-        distanceBetween(a, b) * CONFIG.railwayCostPerUnit * this.terrainMultiplier(terrain) +
-        this.stationCost(a) +
-        this.stationCost(b)) *
+        length * CONFIG.railwayCostPerUnit * this.terrainMultiplier(terrain) +
+        this.stationCost(from) +
+        (to ? this.stationCost(to) : 0)) *
         this.expansionMultiplier(),
     );
+  }
+
+  railwayCost(a: City, b: City, terrain = this.terrainFor(a, b)): number {
+    return this.pathCost(a, b, distanceBetween(a, b), terrain);
   }
 
   stationTier(city: City) {
@@ -284,7 +290,7 @@ export class GameEngine {
     return undefined;
   }
 
-  buildRailway(fromId: string, toId: string): BuildResult {
+  buildRailway(fromId: string, toId: string, sections?: TrackSection[]): BuildResult {
     if (fromId === toId) return { ok: false, error: 'A line needs two different cities.' };
     const from = this.state.cities.get(fromId);
     const to = this.state.cities.get(toId);
@@ -295,7 +301,18 @@ export class GameEngine {
     if (this.findRailwayBetween(fromId, toId)) {
       return { ok: false, error: `${from.name} and ${to.name} are already linked.` };
     }
-    const cost = this.railwayCost(from, to);
+    let shape: { sections: TrackSection[]; path: TrackPath };
+    if (sections && sections.length > 0) {
+      const laid = sections.map((s) => ({ ...s }));
+      laid[0] = { ...laid[0], start: { x: from.x, y: from.y } };
+      laid[laid.length - 1] = { ...laid[laid.length - 1], end: { x: to.x, y: to.y } };
+      shape = { sections: laid, path: buildTrackPath(laid) };
+    } else {
+      shape = straightPath(from, to); // no geometry supplied — straight chord as before
+    }
+
+    const terrain = sampleTerrainPath(shape.path.points);
+    const cost = this.pathCost(from, to, shape.path.length, terrain);
     if (cost > this.state.money) {
       return { ok: false, error: `Short by $${Math.ceil(cost - this.state.money).toLocaleString()}.` };
     }
@@ -304,11 +321,14 @@ export class GameEngine {
       id: nextId('rail'),
       from: fromId,
       to: toId,
-      distance: distanceBetween(from, to),
-      capacity: 0, 
+      distance: shape.path.length,
+      capacity: 0,
       constructionCost: cost,
       level: 1,
       trainIds: [],
+      sections: shape.sections,
+      path: shape.path,
+      terrain,
     };
     this.state.railways.set(railway.id, railway);
     railway.capacity = this.railwayCapacityFor(railway);
@@ -707,6 +727,9 @@ export class GameEngine {
         fromId: r.from,
         toId: r.to,
         distance: r.distance,
+        sectionCount: r.sections.length,
+        waterShare: r.terrain.water,
+        mountainShare: r.terrain.mountain,
         trains: r.trainIds.length,
         capacity: r.capacity,
         level: r.level,
@@ -754,6 +777,9 @@ export interface RailwaySnapshot {
   fromId: string;
   toId: string;
   distance: number;
+  sectionCount: number;
+  waterShare: number;
+  mountainShare: number;
   trains: number;
   capacity: number;
   level: 1 | 2 | 3;
